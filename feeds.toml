@@ -1,15 +1,7 @@
+
 # Shared Unisoc UMS512 / SharkL5Pro SoC support.
-#
-# The SoC repository is embedded at soc/UniXNU-ums512-common so that CI and
-# local builds are reproducible before a standalone UniXNU-ums512-common
-# repository is published.  Once published, replace the local entry with:
-#
-#   [[source]]
-#   name = "ums512"
-#   kind = "soc"
-#   git = "https://github.com/woshimaniubi8/UniXNU-ums512-common"
-#   commit = "<40-character reviewed commit>"
-#
+# Device target: Realme C21Y RMX3261 (Unisoc T610).
+
 [[source]]
 name = "ums512"
 kind = "soc"
