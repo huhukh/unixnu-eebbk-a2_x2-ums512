@@ -1,113 +1,73 @@
+
 /*
- * BBK / EEBBK A2, X2, X2P tablet device tree.
+ * Realme C21Y RMX3261
  *
- * Board: ums512_1h190 (TWRP device tree: hxzbaka/twrp_device_eebbk_ums512_1h190-A2)
- * SoC:   Unisoc UMS512 / SharkL5Pro (T610 family), 2 GiB DRAM at 0x80000000
+ * Board       : ums512_1h10
+ * Hardware ID : S19610AA1
+ * SoC         : Unisoc T610 / UMS512 (SharkL5Pro)
+ * CPU         : 2x Cortex-A75 + 6x Cortex-A55
+ * GPU         : Mali-G52 MP2
+ * RAM variant : 3GB / 4GB
+ * Display     : 720 x 1600
+ * Storage     : eMMC 5.1
  *
- * All values below come from the vendor boot.bin appended DTB
- * (analysis/extracted/boot/boot-dtb.dtb, decompiled to boot-dtb.dts).
+ * References:
+ * - Realme C21Y Android 11 TWRP device tree
+ * - Realme C21Y official kernel source
+ *
+ * Board-specific memory map and peripheral addresses are
+ * intentionally not fabricated.
  */
 
 /dts-v1/;
+
 /include/ "ums512.dtsi"
 
 / {
-	model = "BBK A2 / X2 / X2P (ums512_1h190)";
-	compatible = "eebbk,ums512-1h190", "sprd,ums512";
+	model = "Realme C21Y RMX3261";
 
-	/* 1 GiB: U-Boot reports "DRAM: 1 GiB" (two 512 MiB banks) and the UEFI
- * MemoryMapLib only maps 0x80000000..0xC0000000.  The vendor FDT template
- * says 2 GiB, which does not match this board. */
-	memory@80000000 {
-		device_type = "memory";
-		reg = <0 0x80000000 0 0x40000000>;
+	compatible = "sprd,ums512";
+
+	aliases {
+		/*
+		 * Serial controller aliases are inherited from
+		 * the UMS512 SoC device tree.
+		 */
 	};
 
 	chosen {
-		stdout-path = "/soc/serial@70100000";
 		bootargs = "console=ttyS1,115200n8";
 	};
-
-	/*
-	 * Reserved regions from the vendor FDT.  The UEFI MemoryMapLib must
-	 * describe these as reserved/ACPI-reclaim-free so EDK2 never allocates
-	 * on top of the TEE, modem, DSP or ramoops regions.
-	 */
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		ddrbist: ddrbist-mem@80000000 {
-			reg = <0 0x80000000 0 0x1000>;
-		};
-		rebootescrow: rebootescrow@81ff0000 {
-			no-map;
-			reg = <0 0x81ff0000 0 0x10000>;
-		};
-		audio: audio-mem@87500000 {
-			reg = <0 0x87500000 0 0x300000>;
-		};
-		sipc: sipc-mem@87800000 {
-			reg = <0 0x87800000 0 0x800000>;
-		};
-		sensorhub: sensorhub-mem@88000000 {
-			reg = <0 0x88000000 0 0x1000000>;
-		};
-		audiodsp: audiodsp-mem@89000000 {
-			reg = <0 0x89000000 0 0x600000>;
-		};
-		cp: cp-mem@89600000 {
-			reg = <0 0x89600000 0 0x4900000>;
-		};
-		iq: iq-mem@90000000 {
-			compatible = "sprd,iq-mem";
-			reg = <0 0x90000000 0 0x4000000>;
-		};
-		sml: sml-mem@94000000 {
-			reg = <0 0x94000000 0 0x40000>;
-		};
-		tos: tos-mem@94040000 {
-			reg = <0 0x94040000 0 0x400000>;
-		};
-		ramoops: ramoops@fff80000 {
-			compatible = "ramoops";
-			reg = <0 0xfff80000 0 0x40000>;
-			record-size = <0x8000>;
-			console-size = <0x8000>;
-			pmsg-size = <0x8000>;
-		};
-		debug: debug-mem@100000000 {
-			reg = <0x1 0x0 0 0x1000>;
-		};
-	};
-
-	/* Display: vendor DPU/DSI + 1200x1920 portrait MIPI panel, Goodix touch.
-	 * Not exported to the ADT yet (status disabled) - first bring-up relies on
-	 * the framebuffer left by the stock bootloader. */
-	soc {
-		dpu@20300000 {
-			status = "disabled";
-		};
-		dsi@20400000 {
-			status = "disabled";
-		};
-
-		/* SDHCR11 SDHCI/eMMC host.  cboot leaves the controller initialised
-		 * (clock control 0x0207, host control 0x20, host control 2 0x3000,
-		 * vendor clock register 0x204 = 0x30303060) and the capabilities
-		 * register reports a zero base clock, so the XNU driver only inherits
-		 * that state and uses the vendor command path to read the GPT; see
-		 * drivers/SdhciBlock.  GIC SPI 10, level high (#interrupt-cells = 3 of
-		 * the intc node); the driver polls 0x30 and never enables the line.
-		 * unixnu,sdhci-block is the IONameMatch of the NativeSdhciBlock
-		 * personality, sprd,sdhc-r11p1 is the stock kernel's compatible. */
-		sdhci: mmc@71400000 {
-			compatible = "unixnu,sdhci-block", "sprd,sdhc-r11p1";
-			unixnu,adt-name = "sdhci";
-			reg = <0 0x71400000 0 0x1000>;
-			interrupts = <0 10 4>;
-			status = "okay";
-		};
-	};
 };
+
+/*
+ * The following hardware blocks are inherited from ums512.dtsi.
+ *
+ * CPU:
+ *   2x Cortex-A75
+ *   6x Cortex-A55
+ *
+ * Interrupt controller:
+ *   GICv3 (SoC definition)
+ *
+ * Timer:
+ *   ARM architectural timer (SoC definition)
+ *
+ * PSCI:
+ *   SMC method (SoC definition)
+ *
+ * UART:
+ *   ttyS1, 115200n8
+ *
+ * Not enabled here until the original C21Y DTB is decoded:
+ *   - DRAM memory regions
+ *   - reserved-memory / modem / TEE / DSP
+ *   - eMMC controller and PHY
+ *   - display DPU / DSI / panel
+ *   - touchscreen
+ *   - GPU
+ *   - camera
+ *   - PMIC and regulators
+ *   - USB and charging
+ *   - Wi-Fi and Bluetooth
+ */
