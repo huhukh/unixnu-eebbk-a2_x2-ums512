@@ -1,9 +1,11 @@
-# BBK A2 / X2 / X2P (ums512_1h190) first-bring-up kernel configuration.
+
+# Realme C21Y RMX3261 (Unisoc T610 / UMS512)
+# Experimental first-bring-up kernel configuration.
 #
-# Mirrors the UniXNU-e5 first-bring-up shape: device-tree platform, ARM CPU
-# (GICv3 + architectural timer), prelinked crypto bootstrap.  Storage, display,
-# GPU and trust-cache paths are enabled only after the UART/framebuffer/XNU
-# entry path is confirmed on hardware.
+# Based on the UniXNU ARM device-tree platform configuration.
+# Storage, display, GPU and trust-cache paths remain disabled until
+# their C21Y-specific implementations are verified on hardware.
+
 CONFIG_XNU_BUILD_ARCHIVES=y
 CONFIG_XNU_ARMVIRT_PLATFORM=n
 CONFIG_XNU_ARM_DT_PLATFORM=y
@@ -17,14 +19,3 @@ CONFIG_XNU_NATIVE_TRUST_CACHE=0
 CONFIG_XNU_NATIVE_UFS=n
 CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_NATIVE_ADRENO=n
-
-# SDHCI eMMC block transport (drivers/SdhciBlock).
-#
-# The component archive is built by build-arm-driver.py through the automatic
-# archive plan and has to be force-loaded so its OSMetaClass constructor
-# survives the link; the personality table entry
-# (patches/xnu/sdhci-block-personality.patch) is compiled in through the extra
-# CFLAGS define.  The default warning flags of build-xnu-4k-baseline.sh are
-# repeated here because XNU_EXTRA_CFLAGS replaces them when it is set.
-CONFIG_XNU_EXTRA_CFLAGS="-Wno-reserved-identifier -Wno-pre-c11-compat -Wno-missing-designated-field-initializers -Wno-suggest-override -Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override -Wno-ms-bitfield-padding -DXNU_NATIVE_SDHCI_BLOCK=1"
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/sdhciblock/libSdhciBlock.a"
