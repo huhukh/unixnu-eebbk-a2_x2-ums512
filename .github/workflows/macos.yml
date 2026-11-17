@@ -1,52 +1,24 @@
-name: macOS kernel + payload
 
-# Builds the two Apple-derived layers on a macOS runner:
-#   kernel  : XNU 10063.141.1 from apple-oss-distributions + UniXNU patch series,
-#             prelinked against the iPadOS 17.7.11 (21H461) kernelcache
-#   payload : FAT volume with kernel.macho + kernel.macho.adt + EFI/UniXNU/unixnu.toml
-#
-# Adapted from UniXNU's own .github/workflows/macos.yml (the only supported way to
-# build the kernel: Xcode + macOS).  Apple-derived images are NOT uploaded by
-# default; set upload_images=true on a manual dispatch to also get the payload
-# artifact (your call: it contains Apple kernel/kernelcache-derived bytes).
+name: macOS kernel build
 
 on:
   workflow_dispatch:
     inputs:
-      steps:
-        description: Steps to build
-        type: choice
-        options:
-          - kernel
-          - kernel payload
-        default: kernel payload
       runner:
-        description: GitHub-hosted macOS runner image (macos-26 carries Xcode 26.6 / LLVM 21, macos-15 maxes at Xcode 26.3 / LLVM 17)
+        description: macOS runner
         type: choice
         options:
           - macos-26
           - macos-15
         default: macos-26
       xcode:
-        description: Xcode version on the selected runner (/Applications/Xcode_<version>.app; Xcode 16.x rejects -Wno-unnecessary-virtual-specifier under -Werror)
+        description: Xcode version
         required: true
         default: "26.6"
       ipsw_url:
-        description: IPSW URL (empty uses board.toml / OS profile)
+        description: Optional IPSW URL (empty uses board.toml)
         required: false
         default: ""
-      unique_chip_id:
-        description: Platform seed for the ADT (hex)
-        required: true
-        default: "0x554d533531325041"
-      upload_images:
-        description: Upload the payload artifact (Apple-derived; normally keep off)
-        type: boolean
-        default: false
-      skip_bindings_check:
-        description: Skip the SdhciBlock storage binding check (only for a run that derives a new table)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -57,14 +29,16 @@ defaults:
 
 jobs:
   kernel:
-    name: XNU kernel + payload
+    name: Realme C21Y - XNU kernel
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 360
+
     env:
       UNIXNU_IPSW: ${{ inputs.ipsw_url }}
-      UNIXNU_UNIQUE_CHIP_ID: ${{ inputs.unique_chip_id }}
+      DEVICE_DEFCONFIG: realme-c21y-rmx3261_defconfig
+
     steps:
-      - name: Check out the device repository
+      - name: Checkout C21Y device repository
         uses: actions/checkout@v4
         with:
           path: device
@@ -72,189 +46,169 @@ jobs:
       - name: Clone UniXNU core
         run: |
           set -eux
-          git clone -q --depth 1 --recurse-submodules --shallow-submodules https://github.com/UniXNU/UniXNU.git UniXNU
-          test -f UniXNU/scripts/unixnu/cli.py
-          test -f UniXNU/package/UniXNUPkg/Application/UniXNU/UniXNU.inf
-          du -sh UniXNU
 
-      - uses: actions/setup-python@v5
+          git clone \
+            --depth 1 \
+            --recurse-submodules \
+            --shallow-submodules \
+            https://github.com/UniXNU/UniXNU.git \
+            UniXNU
+
+          test -f UniXNU/unixnu
+          test -f UniXNU/scripts/unixnu/cli.py
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-
-      - name: Install board components into the UniXNU checkout
-        # The checkout above is upstream UniXNU, so the device-owned pieces have
-        # to be injected before defconfig:
-        #   * the SdhciBlock catalog entry (device/components/SdhciBlock.toml);
-        #   * the ADT AAPL,phandle fix: upstream devicetree.py still emits a
-        #     plain 'phandle', which XNU's IODTGetInterruptController cannot
-        #     resolve (gIODTPHandleKey == 'AAPL,phandle'), so interrupt mapping
-        #     would assert on the device tree the payload carries.
-        # The driver itself is a plain IOService for now, so it needs no
-        # IOStorageFamily include; milestone 2 (IOBlockStorageDevice) also needs
-        # the storage ABI bindings from the qualified original kernelcache.
-        run: |
-          set -eux
-          printf '\n' >> UniXNU/components.toml
-          cat device/components/SdhciBlock.toml >> UniXNU/components.toml
-          python3 - <<'PY'
-          from pathlib import Path
-          import tomllib
-
-          tomllib.loads(Path('UniXNU/components.toml').read_text())
-
-          tree = Path('UniXNU/scripts/unixnu/devicetree.py')
-          text = tree.read_text()
-          anchor = "            properties.append((key, struct.pack('<I', entry.scalar(key))))"
-          patched = ("            name = 'AAPL,phandle' if key == 'phandle' else key\n"
-                     "            properties.append((name, struct.pack('<I', entry.scalar(key))))")
-          if anchor in text:
-              tree.write_text(text.replace(anchor, patched, 1))
-          elif 'AAPL,phandle' not in text:
-              raise SystemExit('devicetree.py: phandle anchor not found')
-          print('board components installed')
-          PY
-          git -C UniXNU status --short
 
       - name: Select Xcode
         run: |
           set -eux
+
           preferred="/Applications/Xcode_${{ inputs.xcode }}.app"
+
           if [ -d "$preferred" ]; then
             chosen="$preferred"
           else
-            chosen=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1)
+            chosen="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1)"
           fi
-          test -n "$chosen"
-          echo "DEVELOPER_DIR=$chosen/Contents/Developer" >> "$GITHUB_ENV"
-          echo "Selected Xcode: $chosen"
-          xcodebuild -version
 
-      - name: Check inputs
-        run: |
-          set -eux
-          test -d "$DEVELOPER_DIR"
-          test -f device/board.toml
-          test -f device/configs/bbk-a2_defconfig
+          test -n "$chosen"
+
+          echo "DEVELOPER_DIR=$chosen/Contents/Developer" >> "$GITHUB_ENV"
+
+          sudo xcode-select -s "$chosen/Contents/Developer"
+
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
-          df -h "$GITHUB_WORKSPACE"
 
       - name: Install host tools
         run: |
           set -eux
+
           brew install llvm lld mtools dtc
+
           command -v unifdef || brew install unifdef
-          export PATH="$(brew --prefix llvm)/bin:$(brew --prefix lld)/bin:$PATH"
-          clang --version | head -n 1
-          ld.lld --version | head -n 1
-          mformat --version 2>/dev/null | head -n 1 || true
+
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix lld)/bin" >> "$GITHUB_PATH"
+
+          clang --version
+          ld.lld --version
           dtc --version
 
-      - name: defconfig + status
+      - name: Validate C21Y device files
+        run: |
+          set -eux
+
+          test -f device/board.toml
+          test -f device/porting.toml
+          test -f device/configs/$DEVICE_DEFCONFIG
+          test -f device/dts/realme-c21y-rmx3261.dts
+
+          echo "C21Y device files found."
+
+      - name: Configure UniXNU
         working-directory: UniXNU
         run: |
           set -eux
-          ./unixnu defconfig bbk-a2_defconfig -D "$GITHUB_WORKSPACE/device"
-          ./unixnu status -D "$GITHUB_WORKSPACE/device" | tee "$GITHUB_WORKSPACE/status.txt"
 
-      - name: Build kernel
+          ./unixnu defconfig "$DEVICE_DEFCONFIG" \
+            -D "$GITHUB_WORKSPACE/device"
+
+      - name: Fetch kernel sources
         working-directory: UniXNU
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./unixnu build kernel 2>&1 | tee "$GITHUB_WORKSPACE/kernel.log"
 
-      - name: Check the SdhciBlock storage bindings against the kernel
-        # The driver's IOStorageFamily imports are bound to absolute addresses
-        # (drivers/SdhciBlock/storage-bindings.json) because IOStorageFamily is
-        # not part of the kernel link.  LD_KERNEL_ARCHIVES participates in that
-        # link, so changing the driver moves kernel symbols and makes the table
-        # stale; fail here instead of publishing a kernel with bad dispatch slots.
-        # A run with skip_bindings_check=true is the derivation run: it publishes
-        # the kernel whose dispatch table the new storage-bindings.json comes from.
-        if: ${{ !inputs.skip_bindings_check }}
+          ./unixnu fetch 2>&1 | tee "$GITHUB_WORKSPACE/fetch.log"
+
+      - name: Assemble kernel build tree
         working-directory: UniXNU
         run: |
           set -euxo pipefail
-          KERNEL=$(ls out/*/*/*/kernel/kernel.macho | head -n 1)
-          test -f "$KERNEL"
-          python3 "$GITHUB_WORKSPACE/device/scripts/check-sdhci-bindings.py" "$KERNEL" \
-            "$GITHUB_WORKSPACE/device/drivers/SdhciBlock/storage-bindings.json"
 
-      - name: Apply BBK A2 bring-up kernel patches
+          ./unixnu tree 2>&1 | tee "$GITHUB_WORKSPACE/tree.log"
+
+      - name: Check resolved configuration
         working-directory: UniXNU
         run: |
           set -euxo pipefail
-          KERNEL=$(ls out/*/*/*/kernel/kernel.macho | head -n 1)
-          test -f "$KERNEL"
-          python3 "$GITHUB_WORKSPACE/device/scripts/patch-bringup-kernel.py" "$KERNEL"
 
-      - name: Build payload
-        if: contains(inputs.steps, 'payload')
+          ./unixnu status --json \
+            | tee "$GITHUB_WORKSPACE/status.json"
+
+          test -s "$GITHUB_WORKSPACE/status.json"
+
+      - name: Build XNU kernel
         working-directory: UniXNU
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./unixnu build payload 2>&1 | tee "$GITHUB_WORKSPACE/payload.log"
 
-      - name: Report artifacts
-        if: always()
+          ./unixnu build kernel \
+            2>&1 | tee "$GITHUB_WORKSPACE/kernel.log"
+
+      - name: Verify kernel artifact
         run: |
           set -eux
-          # state.json does not record the work directory; the format-2 output is
-          # out/<device>/<os_profile>/<config>/.
-          WORK=$(ls -d UniXNU/out/*/*/* 2>/dev/null | head -n 1 || true)
-          echo "work=$WORK" | tee -a "$GITHUB_ENV"
+
+          KERNEL="$(find UniXNU/out \
+            -type f \
+            -path '*/kernel/kernel.macho' \
+            | head -n 1)"
+
+          if [ -z "$KERNEL" ]; then
+            echo "ERROR: kernel.macho was not generated."
+            find UniXNU/out -maxdepth 7 -type f | head -200
+            exit 1
+          fi
+
+          test -s "$KERNEL"
+
+          echo "Kernel: $KERNEL"
+          file "$KERNEL"
+          shasum -a 256 "$KERNEL"
+
+          echo "KERNEL_ARTIFACT=$KERNEL" >> "$GITHUB_ENV"
+
+      - name: Build summary
+        if: always()
+        run: |
           {
-            echo "## kernel/payload artifacts"
+            echo "## Realme C21Y - macOS kernel build"
+            echo ""
+            echo "- Device: RMX3261"
+            echo "- SoC: Unisoc T610 / UMS512"
+            echo "- Defconfig: $DEVICE_DEFCONFIG"
+            echo "- Runner: ${{ inputs.runner }}"
+            echo ""
+            echo "### Kernel output"
             echo '```'
-            ls -l "$WORK/kernel" 2>/dev/null || true
-            ls -l "$WORK/payload" 2>/dev/null || true
-            echo '```'
-            echo "## hashes"
-            echo '```'
-            sha256sum "$WORK"/kernel/*.macho "$WORK"/payload/payload.img 2>/dev/null || true
+            if [ -n "${KERNEL_ARTIFACT:-}" ] && [ -f "$KERNEL_ARTIFACT" ]; then
+              ls -lh "$KERNEL_ARTIFACT"
+              shasum -a 256 "$KERNEL_ARTIFACT"
+            else
+              echo "Kernel artifact not generated."
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify the boot image would fit the 35 MiB boot partition
-        if: always() && contains(inputs.steps, 'payload')
-        run: |
-          set -eux
-          WORK=$(ls -d UniXNU/out/*/*/* 2>/dev/null | head -n 1 || true)
-          PAYLOAD="$WORK/payload/payload.img"
-          if [ ! -f "$PAYLOAD" ]; then echo "no payload image (build failed before it)"; exit 0; fi
-          PAYLOAD_BYTES=$(stat -f%z "$PAYLOAD")
-          # boot.img = header + raw BootShim+FD (4,194,624) + payload ramdisk + DTB
-          TOTAL=$((4202496 + PAYLOAD_BYTES))
-          echo "payload=$PAYLOAD_BYTES boot.img_estimate=$TOTAL boot_partition=36700160" | tee -a "$GITHUB_STEP_SUMMARY"
-          if [ "$TOTAL" -gt 36700160 ]; then
-            echo "::warning::boot.img estimate $TOTAL exceeds the 35 MiB boot partition; repartition or shrink the payload"
-          fi
-
-      - name: Upload build logs
+      - name: Upload kernel and build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-logs
+          name: realme-c21y-xnu-kernel
           path: |
+            UniXNU/out/**/kernel/kernel.macho
+            UniXNU/out/**/logs/
+            fetch.log
+            tree.log
             kernel.log
-            payload.log
-            status.txt
-            UniXNU/out/*/*/*/logs/*.log
+            status.json
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Upload payload image (Apple-derived)
-        # boolean inputs compare as booleans, not strings; hashFiles is not
-        # needed (if-no-files-found reports a missing payload instead).
-        if: ${{ inputs.upload_images }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: payload
-          path: |
-            UniXNU/out/*/*/*/payload/payload.img
-            UniXNU/out/*/*/*/payload/payload.json
-            UniXNU/out/*/*/*/kernel/kernel.macho
-          if-no-files-found: error
-          retention-days: 3
