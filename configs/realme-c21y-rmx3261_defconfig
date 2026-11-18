@@ -1,0 +1,17 @@
+# Experimental Realme C21Y RMX3261 UMS512 bring-up configuration.
+# Intentionally omits the EEBBK-specific SdhciBlock component and does not
+# enable display/storage/GPU paths until their C21Y implementations are ported.
+# This defconfig is not selected by the repository's current board.toml.
+CONFIG_XNU_BUILD_ARCHIVES=y
+CONFIG_XNU_ARMVIRT_PLATFORM=n
+CONFIG_XNU_ARM_DT_PLATFORM=y
+CONFIG_XNU_ARMCPU=y
+CONFIG_XNU_NATIVE_ARCH_TIMER=y
+CONFIG_XNU_NATIVE_PAN=y
+CONFIG_XNU_SOURCE_CORECRYPTO14=y
+CONFIG_XNU_SOURCE_PTHREAD=y
+CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
+CONFIG_XNU_NATIVE_TRUST_CACHE=0
+CONFIG_XNU_NATIVE_UFS=n
+CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
+CONFIG_XNU_NATIVE_ADRENO=n
