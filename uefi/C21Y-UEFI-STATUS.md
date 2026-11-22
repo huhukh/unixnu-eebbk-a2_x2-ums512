@@ -19,6 +19,22 @@ not validated C21Y facts. They are placeholders and must not be used for
 flashing. No BBK A2 memory map, display, eMMC, or watchdog-reset driver is
 included.
 
-## Next milestone
-Add a C21Y-specific build target and static validation, then resolve handoff
-addresses from stock bootloader evidence before enabling a hardware boot test.
+## Validation completed
+
+The repository CI workflow has passed these checks on the C21Y branch:
+- C21Y repository/configuration resolution through the UniXNU build driver.
+- Static audit of the C21Y UEFI scaffold.
+- Shell syntax validation of `uefi/build-c21y.sh`.
+- Compilation and decompilation of the C21Y Device Tree.
+- Build-check artifact upload.
+
+This is **not** an EDK2 firmware build. No `SILICIUM_UEFI.fd` has been produced or tested, and no hardware boot has been attempted.
+
+## Next milestones
+
+1. Prepare and pin the exact EDK2/Mu/Silicium dependency revisions used by the existing UMS512 platform.
+2. Run a real C21Y EDK2 compile in CI; fix DSC/FDF/package integration errors without borrowing BBK A2 board addresses.
+3. Capture/derive the C21Y cboot handoff contract: kernel load address, x0/FDT, actual usable RAM banks, bootloader reservations, safe FD relocation window, and UART baud at handoff.
+4. Only after those values are independently verified, add a boot-payload build and a controlled hardware test.
+
+Until then, this scaffold must not be packaged or flashed.
