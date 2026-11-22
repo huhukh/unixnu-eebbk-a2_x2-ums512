@@ -206,7 +206,6 @@ jobs:
           path: |
             build/
             status.json
-            out/
           if-no-files-found: warn
           retention-days: 7
 
