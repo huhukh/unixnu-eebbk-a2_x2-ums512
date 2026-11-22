@@ -133,3 +133,27 @@ every reserved region from the merged stock FDT and vendor boot chain.
   initrd reservations.
 - The two populated Android zones are evidence for physical DRAM coverage,
   not a ready-to-use UEFI descriptor table.
+
+
+## Official C21Y kernel-source cross-check
+
+The public Realme C21Y Android R kernel source contains
+`arch/arm64/boot/dts/sprd/ums512-mach.dtsi`. Its `memory` node also
+describes only `0x80000000 + 0x80000000` (2 GiB), and its
+`reserved-memory` tree includes `debug-mem@100000000` at the 4 GiB
+boundary. The board overlay `S19610AA1-overlay.dts` matches the stock
+overlay identity and adds board carve-outs, but does not add a second
+`memory` node or enlarge the memory node.
+
+The reviewed ARM64 kernel setup path calls the normal FDT scan and then
+`arm64_memblock_init()`; no C21Y-specific hard-coded second-bank
+`memblock_add()` was found in the inspected `arch/arm64/kernel/setup.c`
+or `arch/arm64/mm/init.c` paths. This makes a bootloader-side live-FDT
+memory fixup a plausible explanation for why the running kernel sees RAM
+that is absent from the raw stock DTB, but it is not yet proven.
+
+**Next evidence required:** read the live FDT that the bootloader handed to
+the running kernel (for example `/sys/firmware/fdt`, if exposed to ADB) and
+compare its `/memory/reg` with the original embedded DTB. This will decide
+whether the second bank is supplied by bootloader FDT mutation or another
+kernel/boot path.
