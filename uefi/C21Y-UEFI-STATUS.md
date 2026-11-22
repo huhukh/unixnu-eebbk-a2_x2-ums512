@@ -22,6 +22,16 @@ The downloaded 4-MiB FD artifact was inspected offline:
 
 This validates that CI produced a structurally recognizable EDK2 firmware volume. It does NOT prove that firmware executes on the phone, that DXE memory allocation succeeds, that FD placement is safe, or that XNU boots.
 
+## Additional stock-device evidence (ADB, 2026-11-22)
+- `ro.product.device=RMX3261`, `ro.boot.hardware=S19610AA1`, `ro.hardware=S19610AA1`.
+- `ro.boot.auto.chipid=UMS512-AC`, `ro.boot.auto.efuse=T610`, and `ro.boot.hw_id=19610_1_10_PVT`.
+- `ro.boot.ddrsize=4096M`; `ro.boot.ddrsize.range=[4096,5120)`. This corroborates a 4-GiB DRAM configuration.
+- `ro.boot.board_id=S19610BA1` and `ro.boot.product.hardware.sku=S19610BA1`, while the silicon/hardware identity remains `S19610AA1`. Keep these identifiers distinct; do not replace the DT compatible based only on the product SKU.
+- `ro.boot.boot_devices=soc/soc:ap-apb/71400000.sdio`; this is Android's reported boot-device path, not proof of the bootloader's UEFI handoff.
+- `ro.boot.flash.locked=0`, `ro.boot.vbmeta.device_state=unlocked`, and `ro.boot.verifiedbootstate=orange`.
+- Unprivileged ADB cannot read `/proc/iomem` or `/proc/cmdline` (permission denied).
+- `/proc/zoneinfo` reports two 524,288-page zones: DMA starts PFN 524288 (0x80000000) and Normal starts PFN 1048576 (0x100000000). This is consistent with two 2-GiB banks and approximately 4 GiB total DRAM. It is runtime Linux allocator evidence, not a substitute for cboot's live FDT.
+
 ## Explicitly not bootable / not flashable yet
 This remains a platform scaffold, not a tested boot image. The vendor DTB describes a 2-GiB bank at 0x80000000, while Android runtime zoneinfo indicates additional memory above 4 GiB. The live cboot handoff FDT has not been captured.
 
