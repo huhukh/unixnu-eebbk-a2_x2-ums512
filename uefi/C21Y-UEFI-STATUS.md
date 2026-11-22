@@ -32,6 +32,13 @@ This validates that CI produced a structurally recognizable EDK2 firmware volume
 - Unprivileged ADB cannot read `/proc/iomem` or `/proc/cmdline` (permission denied).
 - `/proc/zoneinfo` reports two 524,288-page zones: DMA starts PFN 524288 (0x80000000) and Normal starts PFN 1048576 (0x100000000). This is consistent with two 2-GiB banks and approximately 4 GiB total DRAM. It is runtime Linux allocator evidence, not a substitute for cboot's live FDT.
 
+## Android partition layout observed via unprivileged ADB (2026-11-22)
+- The device exposes its named partitions at `/dev/block/by-name`; `/dev/block/bootdevice/by-name` does not exist on this build.
+- A/B boot-related partitions: `boot_a/b` = `mmcblk0p40/p41`; `vendor_boot_a/b` = `p42/p43`; `dtb_a/b` = `p44/p45`; `dtbo_a/b` = `p46/p47`; `uboot_a/b` = `p8/p9`.
+- Other relevant partitions include `vbmeta_a/b` = `p54/p55`, `misc` = `p3`, and `super` = `p48`.
+- The reported active slot property is `_a` (`ro.boot.slot_suffix`). The symlink listing is read-only metadata and does not establish which partition was actually consumed at each boot stage.
+- No partition has been read or modified by this audit. Do not write to these block devices.
+
 ## Explicitly not bootable / not flashable yet
 This remains a platform scaffold, not a tested boot image. The vendor DTB describes a 2-GiB bank at 0x80000000, while Android runtime zoneinfo indicates additional memory above 4 GiB. The live cboot handoff FDT has not been captured.
 
