@@ -50,6 +50,8 @@ Fastboot `getvar partition-size` returned byte counts:
 - `uboot_a`: 1,048,576 bytes (1 MiB).
 These are partition capacities, not actual image sizes. Only slot A capacities were queried. No writes were performed.
 
+- Fastboot queries for `current-slot`, `product`, `unlocked`, `secure`, and `max-download-size` returned empty values (no value after the colon). Treat these variables as unsupported/not exposed by this bootloader interface; do not infer their values from the empty response. Android properties separately report slot suffix `_a` and unlocked state.
+
 ## Explicitly not bootable / not flashable yet
 This remains a platform scaffold, not a tested boot image. The vendor DTB describes a 2-GiB bank at 0x80000000, while Android runtime zoneinfo indicates additional memory above 4 GiB. The live cboot handoff FDT has not been captured.
 
