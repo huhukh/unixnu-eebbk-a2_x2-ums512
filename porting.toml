@@ -145,43 +145,51 @@ evidence = [
 
 [[area]]
 id = "memory"
-status = "planned"
+status = "in-progress"
 components = []
-paths = ["dts/**", "uefi/**/MemoryMapLib/**"]
+paths = ["dts/**", "uefi/**/MemoryMapLib/**", "docs/stock-firmware-audit.md"]
 inputs = [
-  "Realme C21Y device memory configuration.",
-  "C21Y vendor DTB and kernel memory reservations, when available."
+  "User-provided stock C21Y boot.img, base DTB and dtbo.img.",
+  "Android runtime /proc/zoneinfo and MemTotal collected over ADB.",
+  "UniXNU EDK2 MemoryMapLib implementation and DarwinBoot memory handoff requirements."
 ]
 configuration = [
-  "Do not copy the EEBBK 1 GiB or 2 GiB memory map.",
-  "Do not assume that a 4 GiB RAM specification means a contiguous 4 GiB physical memory range.",
-  "Do not copy EEBBK reserved-memory addresses.",
-  "Add memory and reserved-memory nodes only after verifying the C21Y vendor DTB."
+  "Do not copy the EEBBK 1 GiB or 2 GiB memory map or its reserved-memory addresses.",
+  "Do not treat the Android zone layout as a complete UEFI memory descriptor table.",
+  "Keep the C21Y DTS memory node unchanged until the effective boot handoff and merged stock FDT are reconciled.",
+  "A C21Y firmware map must separately account for usable RAM, firmware, bootloader, initrd, secure-world, modem/DSP, framebuffer and ramoops ranges."
 ]
 procedure = [
-  "Obtain the C21Y device DTB from a public device-tree source.",
-  "Decode the DTB and inspect memory and reserved-memory nodes.",
-  "Compare memory regions with the UEFI memory map.",
-  "Check for overlap between firmware, kernel, framebuffer and reserved regions."
+  "Decode and merge the stock C21Y base DTB and DTBO using a real overlay implementation.",
+  "Compare the merged tree with Android runtime PFN zones and reserved-memory regions.",
+  "Audit the C21Y bootloader handoff addresses and identify kernel, FDT, initrd and firmware placement.",
+  "Create a C21Y-specific MemoryMapLib only after all overlaps and ownership boundaries are accounted for."
 ]
 findings = [
-  "The C21Y is sold in different RAM configurations.",
-  "RAM capacity alone does not establish physical memory base addresses or reserved regions.",
-  "The EEBBK memory layout is not evidence of the C21Y memory layout."
+  "The base stock DTB memory node describes 2 GiB at 0x80000000.",
+  "Android /proc/zoneinfo reports a DMA zone beginning at PFN 524288 with 524288 pages and a Normal zone beginning at PFN 1048576 with 524287 pages; with 4 KiB pages these are adjacent approximately 2 GiB ranges beginning at 0x80000000 and 0x100000000.",
+  "Android MemTotal is 3875088 kB; the populated zones' managed counts are consistent with approximately 3.69 GiB managed RAM.",
+  "The repository MemoryMapLib is hard-coded for EEBBK A2 / X2 / X2P (ums512_1h190), not C21Y (ums512_1h10), and must not be reused as a C21Y map.",
+  "The C21Y branch does not yet have a C21Y-specific EDK2 platform package or MemoryMapLib."
 ]
 completion = [
-  "Every physical memory range is accounted for.",
-  "Reserved regions do not overlap firmware or kernel allocations.",
-  "The UEFI memory map is consistent with the C21Y device tree."
+  "The merged stock FDT and runtime RAM ranges are reconciled.",
+  "Every physical memory range and firmware reservation is accounted for.",
+  "The C21Y UEFI memory map is consistent with the actual boot handoff and does not overlap firmware or kernel allocations."
 ]
 limits = [
-  "C21Y-specific physical memory layout has not yet been verified.",
-  "Modem, TEE, DSP and ramoops reservations are not established."
+  "The source of the second runtime RAM bank has not yet been identified.",
+  "C21Y-specific bootloader kernel/FDT/initrd and UEFI firmware placement addresses are not established.",
+  "The exact UEFI usable map and all secure-world, modem/DSP and framebuffer reservations are not established."
 ]
 next_action = [
-  "Decode and inspect the original C21Y DTB before enabling memory reservations."
+  "Merge the stock C21Y DTB and DTBO, then inspect the resulting memory and reserved-memory nodes before writing any C21Y memory map."
 ]
-evidence = []
+evidence = [
+  { kind = "device", reference = "docs/stock-firmware-audit.md", result = "Stock image, overlay and runtime memory audit." },
+  { kind = "source", reference = "https://unixnu.com/porting/device-tree", result = "UniXNU hardware DTB and memory-node requirements." },
+  { kind = "source", reference = "https://unixnu.com/concepts/payload", result = "DarwinBoot excluded-range and memory-window handoff." }
+]
 
 [[area]]
 id = "storage"
