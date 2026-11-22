@@ -10,7 +10,8 @@ fdf = root / "uefi/Platforms/Unisoc/c21yPkg/c21y.fdf"
 inf = root / "uefi/Platforms/Unisoc/c21yPkg/Library/MemoryMapLib/MemoryMapLib.inf"
 cfile = root / "uefi/Platforms/Unisoc/c21yPkg/Library/MemoryMapLib/MemoryMapLib.c"
 cfg = root / "uefi/Resources/Configs/realme-c21y.toml"
-for p in (dsc, fdf, inf, cfile, cfg):
+build_script = root / "uefi/build-c21y.sh"
+for p in (dsc, fdf, inf, cfile, cfg, build_script):
     assert p.is_file(), f"missing {p.relative_to(root)}"
 
 dsc_text = dsc.read_text()
@@ -30,6 +31,9 @@ assert "GetMemoryMap (" in mem
 assert "0x81FF0000" in mem and "0xFFF80000" in mem
 assert "High RAM" not in mem and "DXE Heap" not in mem
 assert "not bootable" in (root / "uefi/C21Y-UEFI-STATUS.md").read_text().lower()
+assert "C21Y_FD_BASE" in build_script.read_text()
+assert "DO NOT package or flash" in build_script.read_text()
+assert "!include SiliciumPkg/Common.fdf.inc" in fdf.read_text()
 
 print("C21Y UEFI scaffold static audit: PASS")
 print("NOTE: this does not compile EDK2 and does not validate hardware boot safety.")
