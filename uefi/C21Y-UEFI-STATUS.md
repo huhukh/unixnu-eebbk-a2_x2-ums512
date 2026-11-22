@@ -52,6 +52,8 @@ These are partition capacities, not actual image sizes. Only slot A capacities w
 
 - Fastboot queries for `current-slot`, `product`, `unlocked`, `secure`, and `max-download-size` returned empty values (no value after the colon). Treat these variables as unsupported/not exposed by this bootloader interface; do not infer their values from the empty response. Android properties separately report slot suffix `_a` and unlocked state.
 
+- `fastboot getvar all` returned only an empty `all:` field, with no variable list. The standard Fastboot variable interface is therefore not providing useful inventory on this device/build; this does not imply that all Fastboot commands are unsupported.
+
 ## Explicitly not bootable / not flashable yet
 This remains a platform scaffold, not a tested boot image. The vendor DTB describes a 2-GiB bank at 0x80000000, while Android runtime zoneinfo indicates additional memory above 4 GiB. The live cboot handoff FDT has not been captured.
 
