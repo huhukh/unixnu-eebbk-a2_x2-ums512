@@ -1,25 +1,17 @@
 /*
  * Realme C21Y RMX3261 initial UEFI memory-map scaffold.
- * Compile-time only: no usable DRAM is advertised until cboot's live FDT,
- * load address and reserved regions are verified. Do not boot or flash.
+ *
+ * FAIL CLOSED: no C21Y-safe UEFI memory map has been established.
+ *
+ * The previous table copied several EEBBK A2 / ums512_1h190 carve-out
+ * addresses into this C21Y / ums512_1h10 package. Those addresses are not
+ * evidence for this board and must not be advertised to the UEFI allocator.
+ *
+ * Return an empty map until the exact C21Y live FDT, bootloader-owned ranges,
+ * firmware relocation window, and usable DRAM banks have been reconciled.
+ * This deliberately prevents a usable/bootable firmware build.
  */
 #include <Library/MemoryMapLib.h>
-
-STATIC EFI_MEMORY_REGION_DESCRIPTOR gMemoryDescriptor[] = {
-  {"DDRBIST", 0x80000000, 0x00001000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"RebootEscrow", 0x81FF0000, 0x00010000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"Audio Mem", 0x87500000, 0x00300000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"SIPC", 0x87800000, 0x00800000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"SP DDR", 0x88000000, 0x00300000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"AudioDSP", 0x89000000, 0x00600000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"CP Memory", 0x89600000, 0x04900000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"IQ Memory", 0x90000000, 0x04000000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"SML", 0x94000000, 0x00040000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"TOS", 0x94040000, 0x03FC0000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"Ramoops", 0xFFF80000, 0x00040000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"DebugMem0", 0x100000000, 0x00001000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
-  {"DebugMem1", 0x844C0000, 0x00004000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN}
-};
 
 VOID
 GetMemoryMap (
@@ -27,6 +19,6 @@ GetMemoryMap (
   OUT UINT8                         *MemoryDescriptorCount
   )
 {
-  *MemoryDescriptor = gMemoryDescriptor;
-  *MemoryDescriptorCount = ARRAY_SIZE (gMemoryDescriptor);
+  *MemoryDescriptor = NULL;
+  *MemoryDescriptorCount = 0;
 }
