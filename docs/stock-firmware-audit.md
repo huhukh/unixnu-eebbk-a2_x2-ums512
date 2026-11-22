@@ -97,3 +97,39 @@ actual boot handoff and UniXNU memory discovery path before final DTS changes.
 - Current GitHub Actions success validates configuration resolution and DTS
   compilation only. It does not validate a complete kernel, UEFI handoff,
   storage, display, input, power management, or bootability.
+
+
+## UniXNU firmware memory-map audit
+
+The repository's existing EDK2 memory map is implemented in
+`uefi/Platforms/Unisoc/bbkA2Pkg/Library/MemoryMapLib/MemoryMapLib.c`.
+It is explicitly for the EEBBK A2 / X2 / X2P board (`ums512_1h190`), not
+the C21Y (`ums512_1h10`). It hard-codes that board's BootShim, UEFI FD,
+stacks, SEC/DXE heaps, FDT, initrd, modem/TEE/audio carve-outs, display buffer,
+and peripheral MMIO regions. Its addresses and assumptions must not be copied
+into a C21Y package.
+
+The C21Y branch does not yet contain a C21Y-specific EDK2 platform package or
+`MemoryMapLib`. The current C21Y DTS is intentionally a host-build skeleton,
+and the current successful GitHub Actions job does not build or run UEFI.
+
+The UniXNU device-tree documentation describes a single enabled memory node
+for a contiguous DRAM range, while its payload/DarwinBoot handoff separately
+supports excluded ranges for gaps between DRAM banks and firmware-owned
+memory. The Android runtime PFN evidence suggests the two C21Y banks are
+adjacent, but this alone does not identify the exact UEFI usable/reserved map.
+Before creating a C21Y `MemoryMapLib`, we still need to establish the actual
+bootloader load addresses, firmware handoff address, initrd location, and
+every reserved region from the merged stock FDT and vendor boot chain.
+
+### Immediate implementation constraints
+
+- Keep the C21Y DTS memory node unchanged until the merged DTB and runtime
+  handoff are reconciled.
+- Do not reuse EEBBK `FD_BASE`, `FD_SIZE`, stack, heap, initrd, or framebuffer
+  addresses.
+- A future C21Y UEFI map must distinguish usable conventional RAM from
+  bootloader, firmware, secure-world, modem/DSP, framebuffer, ramoops, and
+  initrd reservations.
+- The two populated Android zones are evidence for physical DRAM coverage,
+  not a ready-to-use UEFI descriptor table.
