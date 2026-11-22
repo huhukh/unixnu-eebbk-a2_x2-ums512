@@ -18,3 +18,7 @@ audio are not yet hardware-qualified.
 **Do not flash artifacts from this branch yet.** A successful host build or DTS
 compile is not evidence that the phone can boot UniXNU. Obtain and decode the
 exact stock RMX3261 DTB and boot-chain handoff details first.
+
+A first-pass audit of the supplied stock boot/DTB/DTBO files is recorded in
+[`docs/stock-firmware-audit.md`](docs/stock-firmware-audit.md). The board ID
+matches, but the effective DRAM map remains unresolved.
