@@ -49,6 +49,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Verify Python tomllib
+        run: |
+          python3 --version
+          python3 -c "import tomllib; print('tomllib OK')"
+
       - name: Install build dependencies
         run: |
           set -eux
