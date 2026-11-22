@@ -1,16 +1,9 @@
-name: build
 
-# Builds the two missing layers of the BBK/EEBBK A2 · X2 · X2P UniXNU port:
-#   1. firmware : SILICIUM_UEFI.fd (EDK2 + Project Silicium, UMS512 platform)
-#                 + BootShim.bin + bbk-a2-uefi.bin
-#   2. bootimg  : dist/boot.img (stock Android v2 layout, raw BootShim+FD kernel,
-#                 device tree in the header dtb fields) + static verification
-# A third job re-checks the device repository with the official UniXNU tooling
-# (defconfig / status) so configuration errors fail the run before flashing.
+name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, port/realme-c21y-rmx3261]
   pull_request:
   workflow_dispatch:
 
@@ -18,287 +11,227 @@ permissions:
   contents: read
 
 env:
-  DEPS: ${{ github.workspace }}/deps
+  DEVICE_DEFCONFIG: realme-c21y-rmx3261_defconfig
+  DEVICE_DTS: dts/realme-c21y-rmx3261.dts
+  UNIXNU_DIR: UniXNU
+  OUTPUT_DIR: out
 
 jobs:
-  firmware:
-    name: firmware (EDK2 + Silicium)
+  linux-build-check:
+    name: Linux - C21Y configuration and DTS
     runs-on: ubuntu-22.04
-    timeout-minutes: 150
+    timeout-minutes: 60
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout C21Y device repository
+        uses: actions/checkout@v4
+        with:
+          ref: port/realme-c21y-rmx3261
 
       - name: Free runner disk
         run: |
-          set -eux
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
-            /usr/local/share/boost /usr/local/share/chromium /usr/lib/jvm /usr/local/.ghcup \
-            /opt/hostedtoolcache/Ruby /opt/hostedtoolcache/go /opt/hostedtoolcache/Nodejs \
-            /opt/hostedtoolcache/PyPy /usr/local/lib/node_modules 2>/dev/null || true
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/local/share/chromium \
+            /usr/lib/jvm \
+            /usr/local/.ghcup \
+            /opt/hostedtoolcache/Ruby \
+            /opt/hostedtoolcache/go \
+            /opt/hostedtoolcache/Nodejs \
+            /opt/hostedtoolcache/PyPy \
+            /usr/local/lib/node_modules 2>/dev/null || true
           df -h /
 
-      - name: Install toolchain
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify Python tomllib
+        run: |
+          python3 --version
+          python3 -c "import tomllib; print('tomllib OK')"
+
+      - name: Install build dependencies
         run: |
           set -eux
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang-15 lld-15 llvm-15 uuid-dev nasm acpica-tools device-tree-compiler bc
-          for t in clang clang++ ld.lld llvm-ar llvm-objcopy llvm-rc llvm-nm llvm-objdump llvm-readelf; do
-            sudo ln -sf "/usr/bin/${t}-15" "/usr/bin/$t"
-          done
-          clang --version | head -1
-          iasl -v | head -2 || true
-          df -h /
+            git \
+            python3 \
+            python3-pip \
+            device-tree-compiler \
+            build-essential \
+            bc \
+            bison \
+            flex \
+            libssl-dev \
+            libelf-dev \
+            clang \
+            lld \
+            llvm \
+            make \
+            cmake \
+            nasm \
+            uuid-dev \
+            acpica-tools
 
-      - name: Clone pinned EDK2 dependencies
-        run: |
-          set -eux
-          mkdir -p "$DEPS"
-          # shallow clone of the branch + explicit commit checkout: works even
-          # when the pinned commit is not the branch tip, and avoids the
-          # partial-clone checkout quirks seen on the runner.
-          clone_pin() {
-            name=$1; url=$2; branch=$3; pin=$4
-            dir="$DEPS/$name"
-            rm -rf "$dir"
-            git clone -q --depth 1 --branch "$branch" "$url" "$dir"
-            git -C "$dir" fetch -q --depth 1 origin "$pin" 2>/dev/null || true
-            if git -C "$dir" checkout -q "$pin" 2>/dev/null; then
-              echo "$name: $pin"
-            else
-              echo "WARN: $name pin $pin not in $branch, using branch tip"
-              git -C "$dir" checkout -q "$branch"
-            fi
-            git -C "$dir" rev-parse --short HEAD
-            test -d "$dir/.git"
-          }
-          clone_pin mu_basecore https://github.com/microsoft/mu_basecore release/202608 26bfddb2194b2058f7ac6163b00a2d94a9b7eac6
-          clone_pin mu_plus https://github.com/microsoft/mu_plus release/202608 566cf5c8c2c8adf8e1a337ced1d147bc6246856f
-          clone_pin mu_oem_sample https://github.com/microsoft/mu_oem_sample release/202608 9292f9254adb94c5e5bb09a370b9662fcd66a953
-
-          # uefi-sheng: only Silicon/Silicium is used, and it MUST be the sheng
-          # branch (it carries gSiliciumEntryArgHobGuid and the x0 handoff).
-          git clone -q --filter=blob:none --no-checkout https://github.com/UniXNU/uefi-sheng "$DEPS/uefi-sheng"
-          cd "$DEPS/uefi-sheng"
-          git sparse-checkout init --cone
-          git sparse-checkout set Silicon/Silicium
-          git fetch -q --depth 1 origin sheng
-          git checkout -q 0eb4514db0744b8136a3897ab1af93b713c2c27b 2>/dev/null || git checkout -q sheng
-          git rev-parse --short HEAD
-          ls -d Silicon/Silicium
-
-          # mu_basecore submodules required by package parsing
-          cd "$DEPS/mu_basecore"
-          git submodule update --init --depth 1 \
-            BaseTools/Source/C/BrotliCompress/brotli \
-            MdeModulePkg/Library/BrotliCustomDecompressLib/brotli \
-            MdePkg/Library/MipiSysTLib/mipisyst \
-            MdePkg/Library/BaseFdtLib/libfdt \
-            SecurityPkg/DeviceSecurity/SpdmLib/libspdm
-          df -h /
-
-      - name: Clone UniXNU core (UniXNU.efi + UniXNUDxe + DarwinBoot)
-        run: |
-          set -eux
-          git clone -q --depth 1 --recurse-submodules --shallow-submodules https://github.com/UniXNU/UniXNU.git UniXNU
-          test -f UniXNU/package/UniXNUPkg/Application/UniXNU/UniXNU.inf
-          test -f UniXNU/package/UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe.inf
-          test -f UniXNU/package/UniXNUPkg/Driver/UniXNURamDiskDxe/UniXNURamDiskDxe.inf
-          test -f UniXNU/drivers/DarwinBoot/DarwinBootPkg/Driver/DarwinBoot.inf
-          du -sh UniXNU
-
-      - name: Build firmware
-        run: |
-          set -euxo pipefail
-          export BBK_A2_DEPS="$DEPS"
-          export BBK_A2_REPO="$GITHUB_WORKSPACE/uefi"
-          export BBK_A2_ENV="$GITHUB_WORKSPACE/uefi/env-linux.sh"
-          export BBK_A2_UNIXNU="$GITHUB_WORKSPACE/UniXNU"
-          # Explicit BaseTools path: do not depend on a WORKSPACE/BaseTools symlink.
-          export EDK_TOOLS_PATH="$DEPS/mu_basecore/BaseTools"
-          export WORKSPACE="$DEPS/work"
-          mkdir -p "$WORKSPACE"
-          echo "== dependency tree"; ls "$DEPS"
-          echo "== mu_basecore"; ls "$DEPS/mu_basecore" | head -20
-          test -d "$EDK_TOOLS_PATH/Source/C"
-          # shellcheck disable=SC1090
-          . "$BBK_A2_ENV"
-          echo "WORKSPACE=$WORKSPACE"
-          echo "EDK_TOOLS_PATH=$EDK_TOOLS_PATH"
-          echo "BBK_A2_UNIXNU=$BBK_A2_UNIXNU"
-          make -C "$EDK_TOOLS_PATH/Source/C" -j"$(nproc)" 2>&1 | tee "$GITHUB_WORKSPACE/basetools-build.log"
-          cd "$GITHUB_WORKSPACE/uefi"
-          sh ./build-bbk-a2.sh DEBUG 2>&1 | tee "$GITHUB_WORKSPACE/firmware-build.log"
-
-      - name: Verify firmware artifacts
-        run: |
-          set -eux
-          test -f uefi/build/SILICIUM_UEFI.fd
-          test "$(stat -c%s uefi/build/SILICIUM_UEFI.fd)" = "$((0x400000))"
-          test -f uefi/build/BootShim.bin
-          test -f uefi/build/bbk-a2-uefi.bin
-          python3 - <<'PY'
-          import pathlib, struct
-          shim = pathlib.Path('uefi/build/BootShim.bin').read_bytes()
-          fd = pathlib.Path('uefi/build/SILICIUM_UEFI.fd').read_bytes()
-          assert shim[56:60] == b'ARM\x64', 'ARM64 image magic missing'
-          base, size = struct.unpack_from('<QQ', shim, 8)
-          assert base == 0x80800000, hex(base)
-          assert size == len(shim) + 0x400000, (hex(size), hex(len(shim) + 0x400000))
-          assert len(fd) == 0x400000, hex(len(fd))
-          print('shim header + FD size contract OK')
-          PY
-          # The UniXNU boot manager and the XNU loader must be in the build.
-          BUILT="$DEPS/work/Build/bbkA2Pkg/DEBUG_CLANGDWARF/AARCH64"
-          test -f "$BUILT/UniXNUPkg/Application/UniXNU/UniXNU/OUTPUT/UniXNU.efi"
-          test -f "$BUILT/UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe/OUTPUT/UniXNUDxe.efi"
-          test -f "$BUILT/UniXNUPkg/Driver/UniXNURamDiskDxe/UniXNURamDiskDxe/OUTPUT/UniXNURamDiskDxe.efi"
-          test -f "$BUILT/DarwinBootPkg/Driver/DarwinBoot/OUTPUT/DarwinBoot.efi"
-          echo 'UniXNU.efi + UniXNUDxe + UniXNURamDiskDxe + DarwinBoot built'
-          sha256sum uefi/build/SILICIUM_UEFI.fd uefi/build/BootShim.bin uefi/build/bbk-a2-uefi.bin
-
-      - name: Build log in job summary
-        if: always()
-        run: |
-          {
-            echo '## firmware build'
-            echo '```'
-            tail -120 "$GITHUB_WORKSPACE/firmware-build.log" 2>/dev/null || echo 'no firmware log'
-            echo '```'
-            echo '## basetools build (tail)'
-            echo '```'
-            tail -40 "$GITHUB_WORKSPACE/basetools-build.log" 2>/dev/null || echo 'no basetools log'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: firmware
-          path: |
-            uefi/build/SILICIUM_UEFI.fd
-            uefi/build/BootShim.bin
-            uefi/build/bbk-a2-uefi.bin
-          if-no-files-found: error
-
-  bootimg:
-    name: boot.img (stock layout)
-    needs: firmware
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Free runner disk
-        run: |
-          set -eux
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
-            /usr/local/share/boost /usr/local/share/chromium /usr/lib/jvm /usr/local/.ghcup \
-            /opt/hostedtoolcache/Ruby /opt/hostedtoolcache/go /opt/hostedtoolcache/Nodejs \
-            /opt/hostedtoolcache/PyPy /usr/local/lib/node_modules 2>/dev/null || true
-          df -h /
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install packing tools
-        run: |
-          set -eux
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang-15 lld-15 llvm-15 device-tree-compiler
-          for t in clang ld.lld llvm-ar llvm-objcopy llvm-rc llvm-nm; do
-            sudo ln -sf "/usr/bin/${t}-15" "/usr/bin/$t"
-          done
           python3 --version
-          clang --version | head -1
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: firmware
-          path: uefi/build
-
-      - name: Clone UniXNU core (BootShim compiler + mkbootimg contract)
-        run: git clone -q --depth 1 https://github.com/UniXNU/UniXNU.git UniXNU
-
-      - name: Build boot image
-        run: |
-          set -eux
-          export UNIXNU_TREE="$GITHUB_WORKSPACE/UniXNU"
-          sh tools/build-bootimg.sh uefi/build/SILICIUM_UEFI.fd dist/boot.img
-
-      - name: Verify boot image
-        run: |
-          set -eux
-          python3 tools/verify-bootimg.py dist/boot.img
-          sha256sum dist/boot.img | tee dist/boot.img.sha256
-
-      - name: Pack report in job summary
-        if: always()
-        run: |
-          {
-            echo '## boot image'
-            echo '```'
-            sha256sum dist/boot.img 2>/dev/null || true
-            python3 tools/verify-bootimg.py dist/boot.img 2>&1 | tail -40 || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bootimg
-          path: |
-            dist/boot.img
-            dist/boot.img.sha256
-          if-no-files-found: error
-
-  selftest:
-    name: device repo selftest (unixnu defconfig/status)
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Free runner disk
-        run: |
-          set -eux
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
-            /usr/local/share/boost /usr/local/share/chromium /usr/lib/jvm /usr/local/.ghcup \
-            /opt/hostedtoolcache/Ruby /opt/hostedtoolcache/go /opt/hostedtoolcache/Nodejs \
-            /opt/hostedtoolcache/PyPy /usr/local/lib/node_modules 2>/dev/null || true
+          dtc --version
+          clang --version
           df -h /
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dtc
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends device-tree-compiler
-
-      - name: Clone UniXNU core with submodules (status resolves kits and drivers)
-        run: git clone -q --depth 1 --recurse-submodules --shallow-submodules https://github.com/UniXNU/UniXNU.git UniXNU
-
-      - name: defconfig + status
+      - name: Check C21Y repository files
         run: |
           set -eux
-          cd UniXNU
-          python ./unixnu defconfig bbk-a2_defconfig -D "$GITHUB_WORKSPACE" --out "$GITHUB_WORKSPACE/out"
-          python ./unixnu status -D "$GITHUB_WORKSPACE" --out "$GITHUB_WORKSPACE/out" | tee "$GITHUB_WORKSPACE/status.txt"
-          grep -q "profile  soc" "$GITHUB_WORKSPACE/status.txt"
 
-      - name: Compile device tree
+          test -f board.toml
+          test -f porting.toml
+          test -f feeds.toml
+          test -f "configs/$DEVICE_DEFCONFIG"
+          test -f "$DEVICE_DTS"
+
+          echo "C21Y repository files found."
+          echo "Defconfig: configs/$DEVICE_DEFCONFIG"
+          echo "DTS: $DEVICE_DTS"
+
+      - name: Clone UniXNU core
         run: |
           set -eux
+
+          git clone \
+            --depth 1 \
+            --recurse-submodules \
+            --shallow-submodules \
+            https://github.com/UniXNU/UniXNU.git \
+            "$UNIXNU_DIR"
+
+          test -f "$UNIXNU_DIR/unixnu"
+          test -d "$UNIXNU_DIR/package"
+
+      - name: Resolve C21Y defconfig
+        run: |
+          set -eux
+
+          python3 "$UNIXNU_DIR/unixnu" \
+            defconfig "$DEVICE_DEFCONFIG" \
+            -D "$GITHUB_WORKSPACE" \
+            --out "$GITHUB_WORKSPACE/$OUTPUT_DIR"
+
+          test -d "$OUTPUT_DIR"
+
+          find "$OUTPUT_DIR" -name .config -type f -print
+
+      - name: Fetch build sources
+        run: |
+          set -eux
+
+          cd "$UNIXNU_DIR"
+
+          python3 ./unixnu fetch \
+            -D "$GITHUB_WORKSPACE" \
+            --out "$GITHUB_WORKSPACE/$OUTPUT_DIR"
+
+      - name: Assemble build tree
+        run: |
+          set -eux
+
+          cd "$UNIXNU_DIR"
+
+          python3 ./unixnu tree \
+            -D "$GITHUB_WORKSPACE" \
+            --out "$GITHUB_WORKSPACE/$OUTPUT_DIR"
+
+      - name: Check resolved device configuration
+        run: |
+          set -eux
+
+          cd "$UNIXNU_DIR"
+
+          python3 ./unixnu status \
+            -D "$GITHUB_WORKSPACE" \
+            --out "$GITHUB_WORKSPACE/$OUTPUT_DIR" \
+            --json | tee "$GITHUB_WORKSPACE/status.json"
+
+          test -s "$GITHUB_WORKSPACE/status.json"
+
+      - name: Compile C21Y device tree
+        run: |
+          set -eux
+
           mkdir -p build
-          dtc -I dts -O dtb -i soc/UniXNU-ums512-common/dts -o build/bbk-a2-device-tree.dtb dts/bbk-a2.dts
-          dtc -I dtb -O dts build/bbk-a2-device-tree.dtb | grep -q 'eebbk,ums512-1h190'
-          ls -l build/bbk-a2-device-tree.dtb
 
-      - name: Status in job summary
+          DTS="$GITHUB_WORKSPACE/$DEVICE_DTS"
+
+          # The shared UMS512 DTS is vendored in the C21Y device repository.
+          UMS512_DTS="$GITHUB_WORKSPACE/soc/UniXNU-ums512-common/dts"
+
+          if [ ! -f "$UMS512_DTS/ums512.dtsi" ]; then
+            echo "ERROR: missing $UMS512_DTS/ums512.dtsi"
+            find "$GITHUB_WORKSPACE/soc" -maxdepth 5 -type f -name '*.dtsi' -print || true
+            exit 1
+          fi
+
+          echo "Using UMS512 DTS directory: $UMS512_DTS"
+
+          dtc \
+            -I dts \
+            -O dtb \
+            -i "$UMS512_DTS" \
+            -o build/realme-c21y-rmx3261.dtb \
+            "$DTS"
+
+          test -s build/realme-c21y-rmx3261.dtb
+
+          dtc \
+            -I dtb \
+            -O dts \
+            build/realme-c21y-rmx3261.dtb \
+            -o build/realme-c21y-rmx3261-compiled.dts
+
+          grep -q 'Realme C21Y' \
+            build/realme-c21y-rmx3261-compiled.dts
+
+          ls -lh build/
+
+      - name: Upload build-check artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realme-c21y-build-check
+          path: |
+            build/
+            status.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Build summary
         if: always()
         run: |
           {
-            echo '## unixnu status'
-            echo '```'
-            sed -n '1,40p' "$GITHUB_WORKSPACE/status.txt" 2>/dev/null || echo 'no status output'
+            echo "## Realme C21Y Linux build-check"
+            echo ""
+            echo "- Defconfig: \`$DEVICE_DEFCONFIG\`"
+            echo "- DTS: \`$DEVICE_DTS\`"
+            echo "- Branch: \`$GITHUB_REF_NAME\`"
+            echo ""
+            if [ -f build/realme-c21y-rmx3261.dtb ]; then
+              echo "Device Tree compilation: SUCCESS"
+            else
+              echo "Device Tree compilation: FAILED or NOT REACHED"
+            fi
+            echo ""
+            echo "### Configuration status"
+            echo '```json'
+            if [ -f status.json ]; then
+              head -c 12000 status.json
+            else
+              echo "No status output."
+            fi
+            echo ""
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
