@@ -167,14 +167,12 @@ jobs:
 
           DTS="$GITHUB_WORKSPACE/$DEVICE_DTS"
 
-          # Locate the fetched UMS512 DTS include directory.
-          UMS512_DTS="$(find "$OUTPUT_DIR" \
-            -type f -name ums512.dtsi \
-            -printf '%h\n' | head -n 1)"
+          # The shared UMS512 DTS is vendored in the C21Y device repository.
+          UMS512_DTS="$GITHUB_WORKSPACE/soc/UniXNU-ums512-common/dts"
 
-          if [ -z "$UMS512_DTS" ]; then
-            echo "ERROR: ums512.dtsi was not found in the assembled build tree."
-            find "$OUTPUT_DIR" -maxdepth 6 -type f | head -200
+          if [ ! -f "$UMS512_DTS/ums512.dtsi" ]; then
+            echo "ERROR: missing $UMS512_DTS/ums512.dtsi"
+            find "$GITHUB_WORKSPACE/soc" -maxdepth 5 -type f -name '*.dtsi' -print || true
             exit 1
           fi
 
