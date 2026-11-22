@@ -12,7 +12,8 @@
 
 / {
     model = "Realme C21Y RMX3261";
-    compatible = "sprd,ums512";
+    /* Board ID confirmed by the stock DTBO overlay and device hardware ID. */
+    compatible = "sprd,S19610AA1", "sprd,ums512";
 
     chosen {
         bootargs = "console=ttyS1,115200n8";
