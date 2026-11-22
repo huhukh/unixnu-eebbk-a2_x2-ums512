@@ -292,6 +292,11 @@ jobs:
           DEPS: ${{ runner.temp }}/c21y-uefi-deps
         run: |
           set -eux
+          # BaseTools Brotli compressor is a Git submodule, not included
+          # in a shallow clone of mu_basecore.
+          git -C "$DEPS/mu_basecore" submodule update --init --depth 1 \
+            BaseTools/Source/C/BrotliCompress/brotli
+          test -f "$DEPS/mu_basecore/BaseTools/Source/C/BrotliCompress/brotli/c/common/constants.h"
           make -C "$DEPS/mu_basecore/BaseTools" -j2
           mkdir -p "$DEPS/work"
           ln -s "$DEPS/mu_basecore/BaseTools" "$DEPS/work/BaseTools"
