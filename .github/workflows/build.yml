@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout C21Y device repository
         uses: actions/checkout@v4
+        with:
+          ref: port/realme-c21y-rmx3261
 
       - name: Free runner disk
         run: |
