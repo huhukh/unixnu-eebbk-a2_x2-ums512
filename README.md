@@ -1,24 +1,72 @@
-# UniXNU Realme C21Y RMX3261 port
+# UniXNU / XNU Realme C21Y RMX3261 Port
 
-Experimental device port for Realme C21Y (RMX3261/RMX3263), Unisoc T610 / UMS512.
+Eksperimen port sistem berbasis XNU untuk **Realme C21Y RMX3261/RMX3263**
+dengan SoC **Unisoc UMS512 / T610 (S19610AA1)**.
 
-This repository started from the EEBBK A2/X2 UMS512 bring-up. Only SoC-level
-code that is genuinely shared may be reused. EEBBK board-specific UEFI, memory
-map, framebuffer, SDHCI and peripheral settings are not valid C21Y defaults.
+> **Status: bring-up hardware dan audit firmware. Belum bootable. Jangan flash artefak dari branch ini.**
 
-## Current milestone
+## Perkembangan terakhir — 22 November 2026
 
-- C21Y board metadata and defconfig are selected.
-- Shared UMS512 CPU/GIC/timer definitions are used as a starting point.
-- Device-tree file is intentionally conservative and host-build oriented.
-- GitHub Actions checks configuration resolution and DTS compilation.
-- C21Y UEFI handoff, memory map, storage, display, input, power, network and
-audio are not yet hardware-qualified.
+### Sudah dikonfirmasi dari firmware dan perangkat
 
-**Do not flash artifacts from this branch yet.** A successful host build or DTS
-compile is not evidence that the phone can boot UniXNU. Obtain and decode the
-exact stock RMX3261 DTB and boot-chain handoff details first.
+- Identitas board stock: `S19610AA1`, cocok dengan overlay DTBO `sprd,S19610AA1`.
+- Base DTB dari `boot.img` berhasil diekstrak dan diparse sebagai FDT v17.
+- SoC: `Unisoc UMS512 SoC`, compatible `sprd,ums512`.
+- CPU: 8 core ARM64 — 6x Cortex-A55 dan 2x Cortex-A75; MPIDR `0x0` sampai `0x700` dengan langkah `0x100`.
+- GICv3: distributor `0x12000000` ukuran `0x20000`; redistributor `0x12040000` ukuran `0x100000`, stride `0x20000`.
+- UART stock console: `0x70100000`, status `okay`; UART kedua `0x70000000`.
+- Display blocks: DPU `0x20300000` ukuran `0x1000`; DSI `0x20400000` ukuran `0x1000`.
+- Base DTB memory node: `0x80000000 + 0x80000000` (2 GiB).
+- Android runtime sebelumnya menunjukkan dua populated memory zones: sekitar 2 GiB mulai `0x80000000` dan hampir 2 GiB mulai `0x100000000`. Ini membuktikan cakupan RAM runtime sekitar 4 GiB, **bukan** peta RAM UEFI yang siap dipakai.
+- Stock DTBO berisi satu overlay board `Unisoc UMS512 1H10 board`, compatible `sprd,S19610AA1`. Overlay menambahkan reservasi logo/framebuffer/face-id/writeback dan konfigurasi perangkat board.
 
-A first-pass audit of the supplied stock boot/DTB/DTBO files is recorded in
-[`docs/stock-firmware-audit.md`](docs/stock-firmware-audit.md). The board ID
-matches, but the effective DRAM map remains unresolved.
+Rincian, rentang alamat, reserved-memory, dan batas bukti dicatat di
+[`docs/stock-firmware-audit.md`](docs/stock-firmware-audit.md).
+
+### Implementasi yang masih belum selesai
+
+- C21Y-specific UEFI/EDK2 platform package dan MemoryMapLib.
+- Final live FDT hasil bootloader dan peta DRAM/reservasi yang dipakai saat handoff.
+- FD/firmware load address, payload window, stack/heap dan ownership setiap carve-out.
+- UEFI GOP/framebuffer handoff yang terukur.
+- Driver/bring-up C21Y untuk touch, storage, power, radio, audio dan GPU.
+- Build serta uji boot RAM-only XNU dengan logging/framebuffer.
+
+## Peringatan kompatibilitas
+
+Board EEBBK A2/X2 dan profil Qualcomm HackiOS (Redwood/Garnet) bukan profil C21Y.
+Hanya definisi SoC yang terbukti sama boleh dijadikan referensi. Jangan salin
+alamat UEFI, peripheral window, framebuffer, storage atau reserved memory dari
+board lain.
+
+Repo ini juga memuat catatan adaptasi arsitektur HackiOS iOS 16.5 / XNU
+`8796.121.2`: [`docs/HACKIOS-C21Y-PORT-ADAPTATION.md`](docs/HACKIOS-C21Y-PORT-ADAPTATION.md).
+Eksperimen identitas software `iPhone10,3` / `D22AP` tidak mengubah hardware
+fisik C21Y menjadi iPhone X dan tidak menggantikan board descriptor UMS512.
+
+## Milestone
+
+- [x] Identifikasi SoC dan board dari stock firmware.
+- [x] Ekstraksi dan parsing base DTB dari stock boot image.
+- [x] Identifikasi CPU, GICv3, UART, DPU dan DSI dari base DTB.
+- [x] Audit awal DTBO dan board overlay.
+- [x] Kumpulkan bukti runtime Android tentang dua rentang DRAM.
+- [ ] Dapatkan/validasi live FDT final dari bootloader.
+- [ ] Rekonsiliasi semua reserved-memory dan firmware ownership.
+- [ ] Tetapkan alamat UEFI FD, stack, heap dan payload berdasarkan bukti.
+- [ ] Implementasikan C21Y UEFI MemoryMapLib dan platform package.
+- [ ] Buktikan UEFI loader berjalan tanpa menulis partisi.
+- [ ] Boot XNU RAM-only dengan logging/framebuffer.
+- [ ] Bring-up input, storage dan perangkat lain.
+
+## Dokumen teknis
+
+- [Stock firmware audit](docs/stock-firmware-audit.md) — hasil DTB/DTBO, CPU/GIC/UART/display, RAM dan reserved memory.
+- [HackiOS C21Y adaptation](docs/HACKIOS-C21Y-PORT-ADAPTATION.md) — pemetaan arsitektur HackiOS ke board C21Y dan blocker implementasi.
+
+## Safety
+
+**Jangan flash boot/vendor_boot/vbmeta atau image eksperimen.** Parsing DTB,
+kompilasi DTS, dan CI yang sukses bukan bukti perangkat dapat boot. Lanjutkan
+dengan inspeksi read-only dan validasi boot RAM-only sebelum mempertimbangkan
+perubahan partisi.
