@@ -3,157 +3,207 @@
 Date: 2026-11-22
 
 This document records observations from the user's stock `boot.img`,
-`stock_boot_dtb.dtb`, and `dtbo.img`. It is an audit, not a bootability
-claim. No firmware image was modified or flashed.
+embedded base DTB, separate `dtbo.img`, and runtime Android inspection.
+It is an audit, not a bootability claim. No firmware image was modified or
+flashed.
 
-## Verified image layout
+## 1. Image layout and board identity
 
-- `boot.img` is an Android boot image, header version 2, page size 2048.
-- Its header reports a DTB payload size of 152721 bytes.
-- The payload at the computed DTB offset is a one-entry Android DT table
-  (`0xd7b7ab1e`), containing one FDT blob of 152657 bytes.
-- That embedded FDT matches the first 152657 bytes of the supplied
-  `stock_boot_dtb.dtb`; the supplied file has 64 trailing zero-padding bytes.
-- The separate `dtbo.img` is an Android DT table with one entry:
-  payload size 54899 bytes, payload offset 64.
+- The stock `boot.img` contains an Android boot image with an embedded DTB
+  payload. The extracted FDT is 152657 bytes and reports FDT version 17.
+- The extracted base DTB was parsed successfully from
+  `E:\\Alat flash\\c21y-port\\c21y-stock.dtb`.
+- The separate `dtbo.img` was previously inspected as an Android DT table
+  with one overlay entry at payload offset 64.
+- The overlay identifies itself as:
+  - model: `Unisoc UMS512 1H10 board`
+  - compatible: `sprd,S19610AA1`
+  - sc-id: `ums512 1h10 1000`
+- The device's collected hardware ID is `S19610AA1`, matching the overlay.
 
-## Board identity
+## 2. Base DTB — directly parsed values
 
-The sole overlay in `dtbo.img` identifies itself as:
+Root:
+- model: `Unisoc UMS512 SoC`
+- compatible: `sprd,ums512`
+- `#address-cells = 2`, `#size-cells = 2`
 
-- model: `Unisoc UMS512 1H10 board`
-- compatible: `sprd,S19610AA1`
-- sc-id: `ums512 1h10 1000`
+### CPU topology
 
-The device's previously collected hardware ID is `S19610AA1`. This is a
-strong board-identity match for the Realme C21Y unit under investigation.
+The parsed `/cpus` nodes identify eight ARMv8 CPUs:
 
-## Base DTB observations
+| MPIDR / node | CPU |
+|---|---|
+| `0x000` / `cpu@0` | Cortex-A55 |
+| `0x100` / `cpu@100` | Cortex-A55 |
+| `0x200` / `cpu@200` | Cortex-A55 |
+| `0x300` / `cpu@300` | Cortex-A55 |
+| `0x400` / `cpu@400` | Cortex-A55 |
+| `0x500` / `cpu@500` | Cortex-A55 |
+| `0x600` / `cpu@600` | Cortex-A75 |
+| `0x700` / `cpu@700` | Cortex-A75 |
 
-- SoC model: `Unisoc UMS512 SoC`
-- SoC compatible: `sprd,ums512`
-- UART node at `0x70100000` is enabled; the chosen stdout path points to it.
-- Boot arguments include `earlycon=sprd_serial,0x70100000,115200n8` and
-  `console=ttyS1,115200n8`.
-- The base tree has one node with `device_type = "memory"`:
-  `reg = <0x0 0x80000000 0x0 0x80000000>`, i.e. a 2 GiB range beginning at
-  physical address 0x80000000.
-- The base tree also contains a reserved-memory entry at
-  `0x100000000` (4 GiB boundary).
+All CPU nodes use `enable-method = "psci"`. This confirms the static DTB
+CPU topology; runtime PSCI behavior and CPU start-up from a new loader remain
+to be tested.
 
-## Board overlay observations
+### GICv3
 
-The overlay has fixups against symbols in the base DTB and multiple fragments.
-It adds board-specific nodes and settings for, among other things, GPIO/pinctrl,
-thermal zones, camera sensors, audio codec, charger, NFC, touch, Wi-Fi and
-display-panel alternatives.
+Parsed node: `/interrupt-controller@12000000`
 
-The overlay's reserved-memory fragment adds these regions:
+| Register block | Base | Size |
+|---|---:|---:|
+| GIC Distributor (GICD) | `0x12000000` | `0x20000` |
+| GIC Redistributor (GICR) | `0x12040000` | `0x100000` |
+
+- Redistributor stride: `0x20000`
+- `#redistributor-regions = 1`
+- Compatible: `arm,gic-v3`
+
+These are base-DTB register ranges, not proof that an experimental XNU
+interrupt controller implementation is already functional.
+
+### UART
+
+| Node | Base | Size | Status |
+|---|---:|---:|---|
+| `serial@70000000` | `0x70000000` | `0x100` | okay |
+| `serial@70100000` | `0x70100000` | `0x100` | okay |
+
+The `/chosen/stdout-path` is
+`/soc/ap-apb/serial@70100000`. Boot arguments specify
+`earlycon=sprd_serial,0x70100000,115200n8` and
+`console=ttyS1,115200n8`. This makes `0x70100000` the stock console
+candidate. The UART is Spreadtrum/Unisoc-specific, not assumed to be PL011;
+loader UART compatibility must be checked.
+
+### Display controller
+
+| Node | Base | Size | Compatible |
+|---|---:|---:|---|
+| DPU `dpu@20300000` | `0x20300000` | `0x1000` | `sprd,display-processor` |
+| DSI `dsi@20400000` | `0x20400000` | `0x1000` | `sprd,dsi-host` |
+
+Both nodes are marked `okay`. The DSI node references a
+`sprd,generic-mipi-panel`. This identifies controller register blocks;
+it does not establish UEFI GOP support or the framebuffer's live address,
+pixel format, stride or ownership.
+
+## 3. Base DTB memory description
+
+The base DTB has one `device_type = "memory"` node:
+
+```
+reg = <0x0 0x80000000 0x0 0x80000000>
+```
+
+Therefore the raw base DTB describes a 2 GiB range beginning at physical
+address `0x80000000`, ending at `0x100000000` (exclusive).
+
+This is the raw/static DTB result, not necessarily the final memory map
+handed to the kernel by the bootloader.
+
+## 4. Base DTB reserved-memory nodes
+
+The parser reported these entries in `/reserved-memory`:
 
 | Region | Address | Size |
 |---|---:|---:|
-| Logo buffer | 0x9e000000 | 0x9e4000 |
-| Face ID | 0xefaae000 | 0x500000 |
-| Framebuffer | 0xfd708000 | 0x1e5a000 |
-| Writeback | 0xff562000 | 0xa1e000 |
+| DDRBIST | `0x80000000` | `0x1000` |
+| Reboot escrow | `0x81FF0000` | `0x10000` |
+| Audio | `0x87500000` | `0x300000` |
+| SIPC | `0x87800000` | `0x800000` |
+| SP DDR | `0x88000000` | `0x300000` |
+| Audio DSP | `0x89000000` | `0x600000` |
+| CP memory | `0x89600000` | `0x4900000` |
+| IQ memory | `0x90000000` | `0x4000000` |
+| SML | `0x94000000` | `0x40000` |
+| TOS | `0x94040000` | `0x3FC0000` |
+| Ramoops | `0xFFF80000` | `0x40000` |
+| Debug memory | `0x100000000` | `0x1000` |
+| Debug memory | `0x844C0000` | `0x4000` |
 
-The overlay does not contain a memory-node update that explains a larger DRAM
-map.
+The table is limited to nodes present in the raw base DTB. It is not a
+complete list of firmware-owned memory after the board overlay and runtime
+bootloader fixups.
 
-## Runtime memory-map evidence (ADB, 2026-11-22)
+## 5. Board overlay reserved-memory observations
 
-The user collected `/proc/zoneinfo` from the running stock Android kernel.
-It reports two populated zones with distinct physical PFN ranges (4 KiB pages):
+The board overlay adds these regions:
+
+| Region | Address | Size |
+|---|---:|---:|
+| Logo buffer | `0x9E000000` | `0x9E4000` |
+| Face ID | `0xEFAAE000` | `0x500000` |
+| Framebuffer | `0xFD708000` | `0x1E5A000` |
+| Writeback | `0xFF562000` | `0xA1E000` |
+
+The overlay also contains board-specific fragments and fixups for GPIO/pinctrl,
+thermal zones, camera, audio, charger, NFC, touch, Wi-Fi and display-panel
+alternatives. A fully merged FDT must be generated with a real overlay
+implementation before treating all base/overlay phandles and nodes as one
+final tree.
+
+The overlay does not add a second memory node or explain the larger DRAM map.
+
+## 6. Runtime Android memory evidence
+
+Previously collected `/proc/zoneinfo` from the running stock Android kernel
+reported two populated zones (4 KiB pages):
 
 | Zone | start_pfn | spanned pages | Physical start | Span | present pages |
 |---|---:|---:|---:|---:|---:|
-| DMA | 524288 | 524288 | 0x80000000 (2 GiB) | 2 GiB | 524272 |
-| Normal | 1048576 | 524287 | 0x100000000 (4 GiB) | almost 2 GiB | 524287 |
+| DMA | 524288 | 524288 | `0x80000000` | 2 GiB | 524272 |
+| Normal | 1048576 | 524287 | `0x100000000` | almost 2 GiB | 524287 |
 
-This is strong runtime evidence for two adjacent RAM banks: approximately
-2 GiB at 0x80000000 followed immediately by approximately 2 GiB at
-0x100000000. Together they span approximately 4 GiB from 0x80000000 through
-0x17fffffff, subject to the small holes/reservations indicated by `present`.
+This is strong runtime evidence that Android manages two DRAM ranges:
+approximately 2 GiB at `0x80000000` and almost 2 GiB at
+`0x100000000`. Together they cover approximately 4 GiB of physical
+address space, subject to holes and reservations.
 
-`MemTotal` is 3,875,088 kB. Summing the populated zone `managed` counts
-(462801 + 505971 pages) gives 968772 pages, approximately 3.69 GiB, consistent
-with the userspace report after firmware/kernel reservations.
+Previously collected `MemTotal` was 3,875,088 kB. This is usable-memory
+accounting after kernel and firmware reservations, not a firmware memory map.
 
-This resolves the apparent 2 GiB vs 3.7 GiB discrepancy at the level of the
-running kernel's zone layout: the base DTB memory node describes the first
-bank, while the running kernel also manages a second bank beginning at 4 GiB.
-The mechanism by which the second bank is supplied (bootloader memory fixup,
-platform code, or another handoff path) is still unverified. `/proc/cmdline`,
-`/proc/buddyinfo`, and kernel log access were denied or unavailable in this
-ADB session. Do not encode a guessed contiguous memory range; inspect the
-actual boot handoff and UniXNU memory discovery path before final DTS changes.
+The mechanism by which the second bank is supplied is still unverified.
+The raw base DTB and overlay do not explain it. A bootloader-side live-FDT
+fixup is plausible but not proven. Reading `/sys/firmware/fdt` and
+`/proc/device-tree` from Android was blocked by permissions/SELinux in the
+recorded session.
 
-## Safety and next work
+## 7. UniXNU firmware memory-map constraints
 
-- Do not flash the minimal DTS output or any experimental WDT loader.
-- The overlay has external and local phandle fixups. A proper merged tree must
-  be produced with a real DT overlay implementation (for example
-  `fdtoverlay`) before treating the combined hardware description as final.
-- Current GitHub Actions success validates configuration resolution and DTS
-  compilation only. It does not validate a complete kernel, UEFI handoff,
-  storage, display, input, power management, or bootability.
+The existing EDK2 memory map under
+`uefi/Platforms/Unisoc/bbkA2Pkg/Library/MemoryMapLib/MemoryMapLib.c`
+belongs to EEBBK A2/X2/X2P (`ums512_1h190`), not C21Y
+(`ums512_1h10`). Its BootShim, UEFI FD, stack, heaps, FDT, initrd,
+modem/TEE/audio carve-outs, display and MMIO values must not be copied.
 
+The C21Y branch still lacks a hardware-qualified C21Y EDK2 package and
+MemoryMapLib. The currently selected C21Y memory-map implementation is
+intentionally fail-closed/empty rather than advertising unverified RAM.
 
-## UniXNU firmware memory-map audit
+## 8. Current conclusions and next gates
 
-The repository's existing EDK2 memory map is implemented in
-`uefi/Platforms/Unisoc/bbkA2Pkg/Library/MemoryMapLib/MemoryMapLib.c`.
-It is explicitly for the EEBBK A2 / X2 / X2P board (`ums512_1h190`), not
-the C21Y (`ums512_1h10`). It hard-codes that board's BootShim, UEFI FD,
-stacks, SEC/DXE heaps, FDT, initrd, modem/TEE/audio carve-outs, display buffer,
-and peripheral MMIO regions. Its addresses and assumptions must not be copied
-into a C21Y package.
+Confirmed from the raw base DTB:
+- UMS512 SoC identity.
+- Eight-core CPU topology: six A55 and two A75.
+- GICv3 register ranges and redistributor stride.
+- Two enabled Unisoc UART register blocks and stock console path.
+- DPU and DSI register blocks.
+- Raw base memory node and the listed base reserved-memory nodes.
 
-The C21Y branch does not yet contain a C21Y-specific EDK2 platform package or
-`MemoryMapLib`. The current C21Y DTS is intentionally a host-build skeleton,
-and the current successful GitHub Actions job does not build or run UEFI.
+Confirmed from separate sources:
+- Board overlay identity matches `S19610AA1`.
+- Android runtime sees two populated DRAM zones spanning approximately 4 GiB.
+- Overlay reserves logo, face-ID, framebuffer and writeback regions.
 
-The UniXNU device-tree documentation describes a single enabled memory node
-for a contiguous DRAM range, while its payload/DarwinBoot handoff separately
-supports excluded ranges for gaps between DRAM banks and firmware-owned
-memory. The Android runtime PFN evidence suggests the two C21Y banks are
-adjacent, but this alone does not identify the exact UEFI usable/reserved map.
-Before creating a C21Y `MemoryMapLib`, we still need to establish the actual
-bootloader load addresses, firmware handoff address, initrd location, and
-every reserved region from the merged stock FDT and vendor boot chain.
+Still unresolved:
+1. Final live FDT after bootloader fixups and overlays.
+2. Exact DRAM banks and usable/reserved UEFI memory descriptors.
+3. Firmware FD, BootShim, stack, heap, initrd and XNUP payload addresses.
+4. GOP framebuffer base, format, stride and ownership at UEFI handoff.
+5. C21Y UEFI package and actual XNU loader compatibility.
 
-### Immediate implementation constraints
-
-- Keep the C21Y DTS memory node unchanged until the merged DTB and runtime
-  handoff are reconciled.
-- Do not reuse EEBBK `FD_BASE`, `FD_SIZE`, stack, heap, initrd, or framebuffer
-  addresses.
-- A future C21Y UEFI map must distinguish usable conventional RAM from
-  bootloader, firmware, secure-world, modem/DSP, framebuffer, ramoops, and
-  initrd reservations.
-- The two populated Android zones are evidence for physical DRAM coverage,
-  not a ready-to-use UEFI descriptor table.
-
-
-## Official C21Y kernel-source cross-check
-
-The public Realme C21Y Android R kernel source contains
-`arch/arm64/boot/dts/sprd/ums512-mach.dtsi`. Its `memory` node also
-describes only `0x80000000 + 0x80000000` (2 GiB), and its
-`reserved-memory` tree includes `debug-mem@100000000` at the 4 GiB
-boundary. The board overlay `S19610AA1-overlay.dts` matches the stock
-overlay identity and adds board carve-outs, but does not add a second
-`memory` node or enlarge the memory node.
-
-The reviewed ARM64 kernel setup path calls the normal FDT scan and then
-`arm64_memblock_init()`; no C21Y-specific hard-coded second-bank
-`memblock_add()` was found in the inspected `arch/arm64/kernel/setup.c`
-or `arch/arm64/mm/init.c` paths. This makes a bootloader-side live-FDT
-memory fixup a plausible explanation for why the running kernel sees RAM
-that is absent from the raw stock DTB, but it is not yet proven.
-
-**Next evidence required:** read the live FDT that the bootloader handed to
-the running kernel (for example `/sys/firmware/fdt`, if exposed to ADB) and
-compare its `/memory/reg` with the original embedded DTB. This will decide
-whether the second bank is supplied by bootloader FDT mutation or another
-kernel/boot path.
+**Do not flash experimental images.** Continue read-only inspection and
+prove a repeatable RAM-only loader/XNU boot before considering any partition
+write. DTS compilation and CI success do not establish bootability.
