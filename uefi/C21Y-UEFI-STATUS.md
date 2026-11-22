@@ -39,6 +39,8 @@ This validates that CI produced a structurally recognizable EDK2 firmware volume
 - The reported active slot property is `_a` (`ro.boot.slot_suffix`). The symlink listing is read-only metadata and does not establish which partition was actually consumed at each boot stage.
 - No partition has been read or modified by this audit. Do not write to these block devices.
 
+- Attempts to read `/sys/class/block/mmcblk0pN/size` for boot-related partitions via unprivileged ADB returned `Permission denied`; partition capacities remain unknown. Do not infer sizes from partition numbering or symlink targets.
+
 ## Explicitly not bootable / not flashable yet
 This remains a platform scaffold, not a tested boot image. The vendor DTB describes a 2-GiB bank at 0x80000000, while Android runtime zoneinfo indicates additional memory above 4 GiB. The live cboot handoff FDT has not been captured.
 
