@@ -83,6 +83,15 @@
 		};
 	};
 
+	/* Architectural timer is not an MMIO child of the simple-bus. */
+	timer {
+		compatible = "arm,armv8-timer";
+		unixnu,adt-name = "timer";
+		/* Vendor FDT: PPI 13/14/11/10, level high. */
+		interrupts = <1 13 4>, <1 14 4>, <1 11 4>, <1 10 4>;
+		clock-frequency = <26000000>;
+	};
+
 	psci {
 		compatible = "arm,psci-1.0", "arm,psci-0.2";
 		method = "smc";
@@ -105,15 +114,6 @@
 			interrupt-controller;
 			redistributor-stride = <0 0x20000>;
 			#redistributor-regions = <1>;
-		};
-
-		timer {
-			compatible = "arm,armv8-timer";
-			unixnu,adt-name = "timer";
-			/* Vendor FDT: PPI 13/14/11/10, level high. ArmPkg defaults
-			 * (29/30/27/26) leave DXE stuck on the first timer event. */
-			interrupts = <1 13 4>, <1 14 4>, <1 11 4>, <1 10 4>;
-			clock-frequency = <26000000>;
 		};
 
 		uart1: serial@70100000 {
