@@ -70,10 +70,10 @@ It reports two populated zones with distinct physical PFN ranges (4 KiB pages):
 | DMA | 524288 | 524288 | 0x80000000 (2 GiB) | 2 GiB | 524272 |
 | Normal | 1048576 | 524287 | 0x100000000 (4 GiB) | almost 2 GiB | 524287 |
 
-This is strong runtime evidence for two separate RAM banks: approximately
-2 GiB at 0x80000000 and approximately 2 GiB at 0x100000000. It is **not** one
-contiguous 4 GiB range: the address interval from 0x100000000 to 0x100000000
-is not inferred as RAM; the two reported banks begin 2 GiB apart.
+This is strong runtime evidence for two adjacent RAM banks: approximately
+2 GiB at 0x80000000 followed immediately by approximately 2 GiB at
+0x100000000. Together they span approximately 4 GiB from 0x80000000 through
+0x17fffffff, subject to the small holes/reservations indicated by `present`.
 
 `MemTotal` is 3,875,088 kB. Summing the populated zone `managed` counts
 (462801 + 505971 pages) gives 968772 pages, approximately 3.69 GiB, consistent
