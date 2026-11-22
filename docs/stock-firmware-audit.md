@@ -60,13 +60,33 @@ The overlay's reserved-memory fragment adds these regions:
 The overlay does not contain a memory-node update that explains a larger DRAM
 map.
 
-## Important unresolved issue
+## Runtime memory-map evidence (ADB, 2026-11-22)
 
-The Android userspace report collected earlier showed approximately 3.7 GiB
-of total RAM, while the base DTB memory node describes only 2 GiB. These
-observations do not reconcile yet. Possible boot-chain/runtime memory fixups
-must be investigated; no 4 GiB DRAM range should be invented or committed
-until the effective runtime memory map is verified.
+The user collected `/proc/zoneinfo` from the running stock Android kernel.
+It reports two populated zones with distinct physical PFN ranges (4 KiB pages):
+
+| Zone | start_pfn | spanned pages | Physical start | Span | present pages |
+|---|---:|---:|---:|---:|---:|
+| DMA | 524288 | 524288 | 0x80000000 (2 GiB) | 2 GiB | 524272 |
+| Normal | 1048576 | 524287 | 0x100000000 (4 GiB) | almost 2 GiB | 524287 |
+
+This is strong runtime evidence for two separate RAM banks: approximately
+2 GiB at 0x80000000 and approximately 2 GiB at 0x100000000. It is **not** one
+contiguous 4 GiB range: the address interval from 0x100000000 to 0x100000000
+is not inferred as RAM; the two reported banks begin 2 GiB apart.
+
+`MemTotal` is 3,875,088 kB. Summing the populated zone `managed` counts
+(462801 + 505971 pages) gives 968772 pages, approximately 3.69 GiB, consistent
+with the userspace report after firmware/kernel reservations.
+
+This resolves the apparent 2 GiB vs 3.7 GiB discrepancy at the level of the
+running kernel's zone layout: the base DTB memory node describes the first
+bank, while the running kernel also manages a second bank beginning at 4 GiB.
+The mechanism by which the second bank is supplied (bootloader memory fixup,
+platform code, or another handoff path) is still unverified. `/proc/cmdline`,
+`/proc/buddyinfo`, and kernel log access were denied or unavailable in this
+ADB session. Do not encode a guessed contiguous memory range; inspect the
+actual boot handoff and UniXNU memory discovery path before final DTS changes.
 
 ## Safety and next work
 
