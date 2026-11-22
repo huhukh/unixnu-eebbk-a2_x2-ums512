@@ -1,17 +1,11 @@
 /*
  * Realme C21Y RMX3261 initial UEFI memory-map scaffold.
- *
- * IMPORTANT: compile-time scaffold only. The stock DTB exposes one 2-GiB
- * bank at 0x80000000, while Android runtime zoneinfo suggests additional
- * memory above 4 GiB. Until the live cboot handoff FDT and bootloader
- * reservations are measured, this package intentionally does not advertise
- * general-purpose DRAM to DXE. Do not boot/flash this image.
+ * Compile-time only: no usable DRAM is advertised until cboot's live FDT,
+ * load address and reserved regions are verified. Do not boot or flash.
  */
 #include <Library/MemoryMapLib.h>
 
 STATIC EFI_MEMORY_REGION_DESCRIPTOR gMemoryDescriptor[] = {
-  // Keep only the vendor-confirmed low-memory reservations visible.
-  // No guessed UEFI stack, heap, FD, FDT, initrd, or high-RAM ranges.
   {"DDRBIST", 0x80000000, 0x00001000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
   {"RebootEscrow", 0x81FF0000, 0x00010000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
   {"Audio Mem", 0x87500000, 0x00300000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN},
@@ -27,11 +21,12 @@ STATIC EFI_MEMORY_REGION_DESCRIPTOR gMemoryDescriptor[] = {
   {"DebugMem1", 0x844C0000, 0x00004000, AddMem, MEM_RES, UNCACHEABLE, Reserv, UNCACHED_UNBUFFERED_XN}
 };
 
-EFI_MEMORY_REGION_DESCRIPTOR *
-EFIAPI
-GetMemoryRegionDescriptor (
-  VOID
+VOID
+GetMemoryMap (
+  OUT EFI_MEMORY_REGION_DESCRIPTOR **MemoryDescriptor,
+  OUT UINT8                         *MemoryDescriptorCount
   )
 {
-  return gMemoryDescriptor;
+  *MemoryDescriptor = gMemoryDescriptor;
+  *MemoryDescriptorCount = ARRAY_SIZE (gMemoryDescriptor);
 }
