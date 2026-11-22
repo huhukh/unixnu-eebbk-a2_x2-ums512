@@ -85,3 +85,22 @@ The extracted stock firmware binaries in the SPD DLFiles directory were scanned 
 - Attempts to read `/proc/device-tree/memory/reg` and `/sys/firmware/devicetree/base/memory/reg` via unprivileged ADB returned `Permission denied`. The attempted host-side output file was empty; no live FDT bytes were obtained.
 
 Interpretation: stock U-Boot appears to dynamically fix up the FDT memory node and reserve platform memory before entering the Android boot flow. This strengthens the requirement to obtain the final cboot handoff FDT/memory map rather than treating the packaged base DTB as the final map. Static strings alone do not establish bank boundaries, reservation addresses, FDT address, or UEFI/XNU handoff values.
+
+
+## U-Boot memory-fixup source cross-reference (2026-11-22)
+
+A public U-Boot 2015.07 SharkL5Pro/UMS512 BSP source was located for comparison:
+- `Veynamer/bsp_bootloader_u-boot15_sharkl5pro`, commit `eba43fa3542553a7d493edd9c1a47e423b9c5b28`.
+- This is a platform-family source reference, **not yet proven byte-for-byte/source-identical to the Realme C21Y factory U-Boot binary**.
+
+Relevant implementation findings:
+- `fdt_fixup_ddr_size()` (under `CONFIG_DDR_AUTO_DETECT`) obtains `CONFIG_SYS_SDRAM_BASE` and `get_real_ram_size()`, then replaces the `/memory/reg` property with that base and detected size. Thus the packaged DTB's original `/memory/reg` is not necessarily the final Android-kernel memory node.
+- `fdt_fixup_ro_boot_ramsize()` derives `androidboot.ddrsize` from `get_real_ram_size()`; `fdt_fixup_ddrsize_range()` derives the range string from the same value. This matches the observed 4096M and [4096,5120) properties at the behavioral level, but does not independently reveal the physical bank topology.
+- `fdt_fixup_dram_training()` appends `mem_cs` and `mem_cs0_sz` using `get_dram_cs_number()` / `get_dram_cs0_size()`, and adds 4-KiB FDT memreserve entries at `PHYS_SDRAM_1` and, when CS count is 2, `PHYS_SDRAM_1 + CS0 size`.
+- `sprd_fdt_memory.c` implements `sprd,memory-region-auto`: it scans reserved-memory nodes, places auto regions from `DT_ADR`, and shifts later fixed regions forward to avoid overlap. This is a dynamic reserved-memory layout algorithm; exact C21Y node order, `DT_ADR`, and compiled configuration remain unverified.
+
+A second public repository, `TheGammaSqueeze/ums512_spl`, documents an `ums512_1h10` SharkL5Pro SPL bring-up and its secure-world DDR/firewall requirements. It is useful corroborating platform-family research, but its board is not the Realme C21Y and its memory constants must not be copied into this port.
+
+Porting consequence:
+- Do not set UEFI RAM HOBs by simply copying the stock base DTB's 2-GiB `/memory` node, nor assume Android's 4-GiB property proves a single contiguous UEFI-usable range.
+- Still required: confirm the exact C21Y U-Boot's `get_real_ram_size()`, `CONFIG_SYS_SDRAM_BASE`, `DT_ADR`, CS count/CS0 size, final reserved-memory nodes and FDT handoff. The family-source code is a lead for reverse engineering, not authorization to populate a memory map or flash an image.
