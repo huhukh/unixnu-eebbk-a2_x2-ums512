@@ -99,6 +99,11 @@ jobs:
           echo "Defconfig: configs/$DEVICE_DEFCONFIG"
           echo "DTS: $DEVICE_DTS"
 
+      - name: Audit C21Y UEFI scaffold
+        run: |
+          set -eux
+          python3 tools/c21y-uefi-audit.py
+
       - name: Clone UniXNU core
         run: |
           set -eux
