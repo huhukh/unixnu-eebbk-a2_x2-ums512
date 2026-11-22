@@ -29,3 +29,10 @@
 
 [LibraryClasses]
   MemoryMapLib|c21yPkg/Library/MemoryMapLib/MemoryMapLib.inf
+
+[Components]
+  # Minimal EDK2 bring-up set. No board display, eMMC, or XNU payload drivers.
+  SiliciumPkg/Sec/Sec.inf
+  SiliciumPkg/Drivers/RamManagerDxe/RamManagerDxe.inf
+  EmbeddedPkg/Drivers/DtPlatformDxe/DtPlatformDxe.inf
+  MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
