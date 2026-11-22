@@ -1,0 +1,24 @@
+# Realme C21Y RMX3261 / ums512_1h10.
+# Boot packaging is intentionally blocked until cboot's kernel-field load
+# address, handoff registers, FD relocation window, and live FDT are verified.
+[boot_shim]
+requires_kernel_header = true
+
+[uefi_fd]
+# PLACEHOLDER ONLY: no C21Y-safe FD base has been established.
+base = 0x80800000
+size = 0x400000
+
+[boot_image_kernel]
+kernel_compression = "none"
+append_dtb = false
+
+[boot_image]
+header_version = 2
+base = 0
+kernel_offset = 0x8000
+ramdisk_offset = 0x5400000
+tags_offset = 0x100
+dtb_offset = 0x1f00000
+pagesize = 2048
+cmdline = "console=ttyS1,115200n8"
