@@ -260,8 +260,12 @@ jobs:
             build-essential uuid-dev nasm acpica-tools \
             python3 python3-pip python3-venv python3-setuptools \
             clang lld llvm gcc-aarch64-linux-gnu git
-          python3 -m pip install --user --break-system-packages \
-            -r <(curl -fsSL https://raw.githubusercontent.com/UniXNU/uefi-sheng/sheng/pip-requirements.txt)
+          python3 -m venv "${{ runner.temp }}/edk2-venv"
+          . "${{ runner.temp }}/edk2-venv/bin/activate"
+          python -m pip install --upgrade pip
+          curl -fsSL https://raw.githubusercontent.com/UniXNU/uefi-sheng/sheng/pip-requirements.txt \
+            -o "${{ runner.temp }}/edk2-requirements.txt"
+          python -m pip install -r "${{ runner.temp }}/edk2-requirements.txt"
           clang --version
           nasm -v
           iasl -v
