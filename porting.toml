@@ -166,7 +166,9 @@ procedure = [
   "Create a C21Y-specific MemoryMapLib only after all overlaps and ownership boundaries are accounted for."
 ]
 findings = [
-  "The base stock DTB memory node describes 2 GiB at 0x80000000.",
+  "The base stock DTB and the public C21Y vendor source ums512-mach.dtsi both describe 2 GiB at 0x80000000.",
+  "The matching S19610AA1 board overlay adds reservations but does not enlarge the memory node.",
+  "The inspected ARM64 kernel setup/memblock path contains no C21Y-specific hard-coded addition of the second bank; a bootloader-side live-FDT fixup is plausible but unproven.",
   "Android /proc/zoneinfo reports a DMA zone beginning at PFN 524288 with 524288 pages and a Normal zone beginning at PFN 1048576 with 524287 pages; with 4 KiB pages these are adjacent approximately 2 GiB ranges beginning at 0x80000000 and 0x100000000.",
   "Android MemTotal is 3875088 kB; the populated zones' managed counts are consistent with approximately 3.69 GiB managed RAM.",
   "The repository MemoryMapLib is hard-coded for EEBBK A2 / X2 / X2P (ums512_1h190), not C21Y (ums512_1h10), and must not be reused as a C21Y map.",
@@ -178,12 +180,12 @@ completion = [
   "The C21Y UEFI memory map is consistent with the actual boot handoff and does not overlap firmware or kernel allocations."
 ]
 limits = [
-  "The source of the second runtime RAM bank has not yet been identified.",
+  "The source of the second runtime RAM bank has not yet been identified; the live FDT passed by the bootloader has not yet been read.",
   "C21Y-specific bootloader kernel/FDT/initrd and UEFI firmware placement addresses are not established.",
   "The exact UEFI usable map and all secure-world, modem/DSP and framebuffer reservations are not established."
 ]
 next_action = [
-  "Merge the stock C21Y DTB and DTBO, then inspect the resulting memory and reserved-memory nodes before writing any C21Y memory map."
+  "Read the live FDT from /sys/firmware/fdt if exposed to ADB and compare its memory node with the original embedded DTB; then reconcile the merged reserved-memory tree."
 ]
 evidence = [
   { kind = "device", reference = "docs/stock-firmware-audit.md", result = "Stock image, overlay and runtime memory audit." },
