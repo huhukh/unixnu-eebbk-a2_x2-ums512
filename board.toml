@@ -1,34 +1,41 @@
+
 schema_version = 2
 
 [board]
-name = "bbk-a2"
+name = "realme-c21y-rmx3261"
 soc = "UMS512"
 soc_source = "ums512"
 os_profile = "ipados-17.7.11-21H461"
-kit = "bbk-a2"
-description = "BBK(EEBBK) A2/X2/A2P"
+kit = "realme-c21y-rmx3261"
+description = "Realme C21Y RMX3261 (S19610AA1, Unisoc T610)"
 
 [components]
-# Minimal first-bring-up set, same shape as UniXNU-e5 (Unisoc UMS9621):
-# device-tree platform expert + ARM CPU (GICv3 + architectural timer) + the
-# payload/prelink tooling + the SDHCI eMMC transport that publishes the
-# userdata partition (drivers/SdhciBlock, device-owned component registered by
-# .github/workflows/macos.yml through components/SdhciBlock.toml).
-include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot", "SdhciBlock"]
+# Minimal first-bring-up configuration.
+# Storage, display, and GPU are not enabled until their
+# C21Y-specific implementations are verified.
+include = [
+  "ArmDTPlatform",
+  "ArmCpu",
+  "SoftwareAES",
+  "XnuPrelink",
+  "DarwinBoot"
+]
 
 [kernel]
-defconfig = "bbk-a2_defconfig"
-config_fragments = ["arch:configs/common.config", "soc:configs/ums512.config", "os:configs/ipados.config"]
-# The OS profile series is intentionally replaced: its zzz-boot-progress.patch
-# depends on the sheng (SM8550) XNU_SHENG_PMGR context and cannot apply to the
-# Unisoc kernel.  The SoC-independent XnuPrelink patches it also carried are
-# listed in the device series instead (patches/xnu/series).
-patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "device:patches/xnu/series"]
-# The arch profile lists its component archives explicitly, and archive_plan()
-# only auto-adds every selected component when no "component:" entry is
-# present.  This list is the arch profile's list plus the device-owned SDHCI
-# transport; the archive itself is force-loaded through
-# CONFIG_XNU_EXTRA_LD_ARCHIVES in the defconfig.
+defconfig = "realme-c21y-rmx3261_defconfig"
+
+config_fragments = [
+  "arch:configs/common.config",
+  "soc:configs/ums512.config",
+  "os:configs/ipados.config"
+]
+
+patch_series = [
+  "arch:patches/xnu/series",
+  "soc:patches/xnu/series",
+  "device:patches/xnu/series"
+]
+
 archives = [
   "build-corecrypto-14.py",
   "build-corecrypto-14.py --namespace",
@@ -37,45 +44,13 @@ archives = [
   "component:SoftwareAES",
   "build-software-aes-bindings.py",
   "build-mockfs-fixture.py",
-  "build-libpthread-kernel.py",
-  "component:SdhciBlock",
+  "build-libpthread-kernel.py"
 ]
 
 [device_tree]
-source = "device:dts/bbk-a2.dts"
+source = "device:dts/realme-c21y-rmx3261.dts"
 include_dirs = ["soc:dts"]
 
-[firmware]
-# uefi-bbk-a2 follows the Mu-Silicium repository layout that
-# `./unixnu build firmware --uefi ../uefi-bbk-a2` and
-# `./unixnu bootimg --uefi ../uefi-bbk-a2` expect:
-#   BootShim/BootShim.S                 Unisoc cboot trampoline (0x80080000 -> FD_BASE)
-#   Resources/Configs/bbk-a2.toml       [boot_shim] [uefi_fd] [boot_image_kernel] [boot_image]
-#   Resources/Scripts/mkbootimg.py      Android boot image writer (from Mu-Silicium)
-#   Platforms/Unisoc/bbkA2Pkg/          DSC/FDF + MemoryMapLib + UniXNU payload DXE
-#   Silicon/Unisoc/UMS512Pkg/           SoC layer (UART, GIC, timer, DPU/GOP)
-config = "bbk-a2"
-dsc = "Platforms/Unisoc/bbkA2Pkg/bbkA2.dsc"
-fd = "Build/bbkA2Pkg/{target}_CLANGDWARF/FV/SILICIUM_UEFI.fd"
-packages = [
-  "{uefi}",
-  "{tree}/package",
-  "{tree}/drivers/DarwinBoot",
-  "{edk2}",
-  "{uefi}/Platforms/Unisoc",
-  "{uefi}/Silicon/Unisoc",
-  "{uefi}/Silicon/Silicium",
-]
-
-[firmware.defines]
-DEVICE_MODEL = "bbk-a2"
-ENABLE_SECUREBOOT = "0"
-
-# Stock boot image parameters, read from the vendor boot.bin header:
-#   header_version 2, pagesize 2048, kernel_addr 0x8000, ramdisk_addr 0x5400000
-# plus the tags offset used by the EEBBK device tree (0x100).
-# cboot relocates the kernel field to 0x80080000 regardless of kernel_addr;
-# BootShim then copies the firmware volume to FD_BASE (0x80800000).
 [bootimg.image]
 base = 0x0
 kernel_offset = 0x8000
@@ -85,30 +60,19 @@ pagesize = 2048
 header_version = 2
 
 [payload]
-# The boot partition is 35 MiB (0x2300000, measured from the whole-MiB dump
-# length; the TWRP BoardConfig 40 MiB value carries a TODO and is wrong), so the
-# FAT payload has to stay small for the first milestone.  Booting iOS needs the
-# XNU kernel inside this volume; enlarge the boot partition (see
-# docs/DUAL-BOOT.md) before that.
 volume = "UNIXNU"
-# The prelinked kernel.macho is ~49 MiB, so the FAT payload needs 52 MiB.
-# That does NOT fit the 35 MiB boot partition next to the 4.2 MiB BootShim+
-# firmware kernel field: the payload is a separate artifact for now and needs
-# either a bigger boot partition (repartition) or a FAT partition delivered
-# through userdata (see docs/DUAL-BOOT.md).
-size_mib = 64
 loader = "firmware"
-title = "UniXNU BBK A2/X2"
-dram_size = "0x40000000"
+title = "UniXNU Realme C21Y"
 panic_screen = false
 timeout = 0
-kernel_args = ["-v", "debug=0x144", "serial=3", "amfi_get_out_of_my_way=1"]
+kernel_args = [
+  "-v",
+  "debug=0x144",
+  "serial=3",
+  "amfi_get_out_of_my_way=1"
+]
 
 [payload.adt]
-# Format 2: the ADT is generated by scripts/make-adt.py from dts/bbk-a2.dts.
-chip_id = "512"
 unique_chip_id = "required"
-dram_size = "0x40000000"
-owned_memory_size = "0x10000000"
 psci_method = "smc"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
