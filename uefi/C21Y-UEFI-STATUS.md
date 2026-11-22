@@ -104,3 +104,14 @@ A second public repository, `TheGammaSqueeze/ums512_spl`, documents an `ums512_1
 Porting consequence:
 - Do not set UEFI RAM HOBs by simply copying the stock base DTB's 2-GiB `/memory` node, nor assume Android's 4-GiB property proves a single contiguous UEFI-usable range.
 - Still required: confirm the exact C21Y U-Boot's `get_real_ram_size()`, `CONFIG_SYS_SDRAM_BASE`, `DT_ADR`, CS count/CS0 size, final reserved-memory nodes and FDT handoff. The family-source code is a lead for reverse engineering, not authorization to populate a memory map or flash an image.
+
+
+### Additional UMS512_1h10 BSP configuration cross-check
+
+The same public SharkL5Pro BSP's `include/configs/ums512_1h10.h` provides useful clues, with an important mismatch:
+- `PHYS_SDRAM_1 = 0x80000000`, `CONFIG_DDR_AUTO_DETECT`, and `CONFIG_DUAL_DDR` are enabled in that reference configuration.
+- That source's optional second bank is defined at `0x180000000` (6 GiB), with a configured size constant of `0x20000000`. This does **not** match the C21Y Linux zone evidence for a second region beginning at `0x100000000` (4 GiB). It is therefore a different board/configuration detail and must not be copied.
+- Its example `KERNEL_ADR=0x80080000`, `DT_ADR=0x9df00000`, and `RAMDISK_ADR=0xa0000000` are reference-board constants only, not confirmed C21Y runtime load addresses.
+- The family-source `get_dram_cs_number()` and `get_dram_cs0_size()` read a chipram handoff structure at address `0x1c00`. This suggests the SPL-to-U-Boot shared handoff is where CS topology/CS0 size can be sourced, but the structure layout and live values for the C21Y factory build have not yet been verified.
+
+This mismatch is a useful warning: even within UMS512_1h10 / SharkL5Pro, board configuration constants differ. Keep the C21Y memory map conservative until the actual C21Y binary's configuration and live handoff are established.
