@@ -241,3 +241,79 @@ jobs:
             echo ""
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  edk2-c21y-compile:
+    name: EDK2 - C21Y firmware-volume compile (scaffold)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout C21Y device repository
+        uses: actions/checkout@v4
+        with:
+          ref: port/realme-c21y-rmx3261
+
+      - name: Install EDK2 build dependencies
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential uuid-dev nasm acpica-tools \
+            python3 python3-pip python3-venv python3-setuptools \
+            clang lld llvm gcc-aarch64-linux-gnu git
+          python3 -m pip install --user --break-system-packages \
+            -r <(curl -fsSL https://raw.githubusercontent.com/UniXNU/uefi-sheng/sheng/pip-requirements.txt)
+          clang --version
+          nasm -v
+          iasl -v
+
+      - name: Fetch pinned EDK2 and Silicium source branches
+        env:
+          DEPS: ${{ runner.temp }}/c21y-uefi-deps
+        run: |
+          set -eux
+          mkdir -p "$DEPS"
+          git clone --depth 1 --branch release/202608 https://github.com/microsoft/mu_basecore.git "$DEPS/mu_basecore"
+          git clone --depth 1 --branch release/202608 https://github.com/microsoft/mu_plus.git "$DEPS/mu_plus"
+          git clone --depth 1 --branch release/202608 https://github.com/microsoft/mu_oem_sample.git "$DEPS/mu_oem_sample"
+          git clone --depth 1 --branch sheng https://github.com/UniXNU/uefi-sheng.git "$DEPS/uefi-sheng"
+          git -C "$DEPS/mu_basecore" rev-parse HEAD
+          git -C "$DEPS/mu_plus" rev-parse HEAD
+          git -C "$DEPS/mu_oem_sample" rev-parse HEAD
+          git -C "$DEPS/uefi-sheng" rev-parse HEAD
+          test -f "$DEPS/uefi-sheng/Silicon/Silicium/SiliciumPkg/SiliciumPkg.dsc.inc"
+          test -f "$DEPS/mu_basecore/BaseTools/Makefile"
+
+      - name: Build EDK2 BaseTools
+        env:
+          DEPS: ${{ runner.temp }}/c21y-uefi-deps
+        run: |
+          set -eux
+          make -C "$DEPS/mu_basecore/BaseTools" -j2
+          mkdir -p "$DEPS/work"
+          ln -s "$DEPS/mu_basecore/BaseTools" "$DEPS/work/BaseTools"
+
+      - name: Compile C21Y EDK2 firmware volume
+        env:
+          C21Y_ENV: ${{ github.workspace }}/uefi/env-linux.sh
+          C21Y_DEPS: ${{ runner.temp }}/c21y-uefi-deps
+          C21Y_FD_BASE: "0x80800000"
+          C21Y_FD_SIZE: "0x400000"
+          C21Y_FD_BLOCKS: "0x400"
+          C21Y_BUILD_MODE: DEBUG
+          C21Y_JOBS: "2"
+        run: |
+          set -eux
+          # FD_BASE is a compile-time placeholder only. This job must never
+          # package or flash the resulting scaffold.
+          sh uefi/build-c21y.sh
+          test -s uefi/build-c21y/realme-c21y-uefi-scaffold.fd
+          stat -c 'C21Y scaffold FV: %s bytes' uefi/build-c21y/realme-c21y-uefi-scaffold.fd
+
+      - name: Upload C21Y EDK2 scaffold artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realme-c21y-edk2-scaffold
+          path: uefi/build-c21y/realme-c21y-uefi-scaffold.fd
+          if-no-files-found: warn
+          retention-days: 7
