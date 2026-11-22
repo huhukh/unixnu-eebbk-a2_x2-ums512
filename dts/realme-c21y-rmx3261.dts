@@ -1,46 +1,20 @@
 /*
- * Experimental Realme C21Y RMX3261 board identity for UMS512.
+ * Realme C21Y RMX3261 / RMX3263 - experimental UniXNU board description.
+ * SoC family: Unisoc UMS512 / T610 (SharkL5Pro).
  *
- * This is a host-buildable DTB skeleton, NOT a hardware-validated boot tree.
- * Shared CPU/GIC/timer/UART nodes come from ums512.dtsi. Board RAM banks,
- * bootloader handoff, initrd/FDT addresses, and complete reserved-memory layout
- * must be imported from the exact RMX3261 firmware before using this for boot.
+ * Conservative host-build DTS skeleton. It deliberately does not invent
+ * DRAM banks, reserved-memory ranges, UART register nodes, eMMC, display,
+ * touch, PMIC, Wi-Fi or GPU wiring. Import these from the exact stock C21Y
+ * DTB before using this tree for a hardware boot.
  */
 /dts-v1/;
 /include/ "ums512.dtsi"
 
 / {
-    model = "Realme C21Y RMX3261 (S19610AA1)";
-    compatible = "sprd,S19610AA1", "realme,RMX3261", "sprd,ums512";
+    model = "Realme C21Y RMX3261";
+    compatible = "sprd,ums512";
 
     chosen {
-        stdout-path = "/soc/serial@70100000";
         bootargs = "console=ttyS1,115200n8";
-    };
-
-    /*
-     * Public Android-R board overlay references these display reservations.
-     * Keep them as evidence-backed placeholders; verify against RMX3261's
-     * merged DTB and reserved-memory table before making a UEFI memory map.
-     */
-    reserved-memory {
-        #address-cells = <2>;
-        #size-cells = <2>;
-        ranges;
-
-        logo: logobuffer@9e000000 {
-            reg = <0 0x9e000000 0 0x009e4000>;
-            no-map;
-        };
-
-        framebuffer: framebuffer-mem@fd708000 {
-            reg = <0 0xfd708000 0 0x01e5a000>;
-            no-map;
-        };
-
-        writeback: writeback-mem@ff562000 {
-            reg = <0 0xff562000 0 0x00a1e000>;
-            no-map;
-        };
     };
 };
