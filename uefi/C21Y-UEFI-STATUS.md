@@ -2,116 +2,42 @@
 
 ## What exists
 - Separate EDK2 platform package: `Platforms/Unisoc/c21yPkg`.
-- Separate memory-map library, limited to stock-DTB-confirmed reserved ranges.
+- Separate C21Y memory-map library, currently **fail-closed and empty**. It advertises no RAM to UEFI because the C21Y live FDT, firmware-owned ranges, and relocation window are not established.
 - Separate C21Y boot configuration and build script.
 - UMS512 SoC-wide GIC/timer/UART definitions reused from the shared UMS512 package.
-- CI performs a real EDK2 firmware-volume compile for the C21Y DSC.
+- CI performs an EDK2 firmware-volume compile for the C21Y scaffold.
+
+## Memory-map correction (2026-11-22)
+The previous C21Y `MemoryMapLib.c` contained several carve-out addresses copied from the EEBBK A2 / X2 / X2P (`ums512_1h190`) map. They are not verified C21Y (`ums512_1h10`) reservations and have been removed.
+
+The library now returns a null descriptor pointer and a descriptor count of zero. This is intentionally non-functional: it prevents the UEFI allocator from treating guessed ranges as safe RAM. It may cause memory initialization to stop or fail if executed; that is preferable to silently allocating over modem, secure-world, framebuffer, or firmware-owned memory. The package is still a compile scaffold, not a bootable firmware.
+
+C21Y-specific stock evidence currently confirms:
+- Base DTB memory node: 2 GiB at `0x80000000`.
+- Android runtime zoneinfo: a second populated region starts at `0x100000000`, with almost 2 GiB spanned.
+- DTBO reservations include logo buffer, Face ID, framebuffer, and writeback regions.
+- The bootloader appears to perform dynamic FDT/memory fixups, but the final live FDT and exact UEFI handoff have not been captured.
+
+Do not infer a UEFI memory map from the raw base DTB, Android zones, or EEBBK carve-outs alone.
 
 ## Validation completed
-Latest GitHub Actions run: [#50 - fe2ed950](https://github.com/huhukh/unixnu-eebbk-a2_x2-ums512/actions/runs/45004636483) completed successfully on 2026-11-22.
-- Linux C21Y configuration and DTS job: success.
-- EDK2 C21Y firmware-volume compile (scaffold) job: success.
-- Artifacts uploaded: `realme-c21y-edk2-scaffold` and `realme-c21y-build-check`.
+The latest previously recorded EDK2 CI run compiled the firmware-volume scaffold and structurally validated the generated FV. That run predates this memory-map correction; a new CI run must pass before this revision is considered build-checked.
 
-The downloaded 4-MiB FD artifact was inspected offline:
-- Firmware Volume signature `_FVH` is present.
-- Declared FV length matches the 4,194,304-byte file.
-- FV header checksum is valid.
-- Block map is 1,024 blocks x 4 KiB.
-- Five FFS files were structurally located; strings identify SEC and the RamManagerDxe, DtPlatformDxe, and ResetSystemRuntimeDxe modules.
+A successful EDK2 compile only proves the package can be compiled. It does not prove SEC/DXE executes on the phone or that XNU boots.
 
-This validates that CI produced a structurally recognizable EDK2 firmware volume. It does NOT prove that firmware executes on the phone, that DXE memory allocation succeeds, that FD placement is safe, or that XNU boots.
+## Explicitly not bootable / not flashable
+The following remain unknown:
+- actual cboot kernel-field load address;
+- x0/FDT handoff address and live merged FDT;
+- all usable DRAM banks and bootloader/secure-world/modem/DSP reservations;
+- safe FD relocation window and stack/heap placement;
+- UART settings at the firmware handoff.
 
-## Additional stock-device evidence (ADB, 2026-11-22)
-- `ro.product.device=RMX3261`, `ro.boot.hardware=S19610AA1`, `ro.hardware=S19610AA1`.
-- `ro.boot.auto.chipid=UMS512-AC`, `ro.boot.auto.efuse=T610`, and `ro.boot.hw_id=19610_1_10_PVT`.
-- `ro.boot.ddrsize=4096M`; `ro.boot.ddrsize.range=[4096,5120)`. This corroborates a 4-GiB DRAM configuration.
-- `ro.boot.board_id=S19610BA1` and `ro.boot.product.hardware.sku=S19610BA1`, while the silicon/hardware identity remains `S19610AA1`. Keep these identifiers distinct; do not replace the DT compatible based only on the product SKU.
-- `ro.boot.boot_devices=soc/soc:ap-apb/71400000.sdio`; this is Android's reported boot-device path, not proof of the bootloader's UEFI handoff.
-- `ro.boot.flash.locked=0`, `ro.boot.vbmeta.device_state=unlocked`, and `ro.boot.verifiedbootstate=orange`.
-- Unprivileged ADB cannot read `/proc/iomem` or `/proc/cmdline` (permission denied).
-- `/proc/zoneinfo` reports two 524,288-page zones: DMA starts PFN 524288 (0x80000000) and Normal starts PFN 1048576 (0x100000000). This is consistent with two 2-GiB banks and approximately 4 GiB total DRAM. It is runtime Linux allocator evidence, not a substitute for cboot's live FDT.
-
-## Android partition layout observed via unprivileged ADB (2026-11-22)
-- The device exposes its named partitions at `/dev/block/by-name`; `/dev/block/bootdevice/by-name` does not exist on this build.
-- A/B boot-related partitions: `boot_a/b` = `mmcblk0p40/p41`; `vendor_boot_a/b` = `p42/p43`; `dtb_a/b` = `p44/p45`; `dtbo_a/b` = `p46/p47`; `uboot_a/b` = `p8/p9`.
-- Other relevant partitions include `vbmeta_a/b` = `p54/p55`, `misc` = `p3`, and `super` = `p48`.
-- The reported active slot property is `_a` (`ro.boot.slot_suffix`). The symlink listing is read-only metadata and does not establish which partition was actually consumed at each boot stage.
-- No partition has been read or modified by this audit. Do not write to these block devices.
-
-- Attempts to read `/sys/class/block/mmcblk0pN/size` for boot-related partitions via unprivileged ADB returned `Permission denied`; partition capacities remain unknown. Do not infer sizes from partition numbering or symlink targets.
-
-## Fastboot partition capacities (read-only, 2026-11-22)
-Fastboot `getvar partition-size` returned byte counts:
-- `boot_a`: 67,108,864 bytes (64 MiB).
-- `vendor_boot_a`: 104,857,600 bytes (100 MiB).
-- `dtb_a`: 8,388,608 bytes (8 MiB).
-- `dtbo_a`: 8,388,608 bytes (8 MiB).
-- `uboot_a`: 1,048,576 bytes (1 MiB).
-These are partition capacities, not actual image sizes. Only slot A capacities were queried. No writes were performed.
-
-- Fastboot queries for `current-slot`, `product`, `unlocked`, `secure`, and `max-download-size` returned empty values (no value after the colon). Treat these variables as unsupported/not exposed by this bootloader interface; do not infer their values from the empty response. Android properties separately report slot suffix `_a` and unlocked state.
-
-- `fastboot getvar all` returned only an empty `all:` field, with no variable list. The standard Fastboot variable interface is therefore not providing useful inventory on this device/build; this does not imply that all Fastboot commands are unsupported.
-
-## Explicitly not bootable / not flashable yet
-This remains a platform scaffold, not a tested boot image. The vendor DTB describes a 2-GiB bank at 0x80000000, while Android runtime zoneinfo indicates additional memory above 4 GiB. The live cboot handoff FDT has not been captured.
-
-The current memory map is intentionally incomplete. The SEC code contains a diagnostic string for failure to locate a DXE heap region; this is a reminder that the memory HOB/heap handoff must be validated, not evidence that DXE has successfully run on C21Y.
-
-The following must be established before building a usable boot payload: actual kernel-field load address, x0/FDT handoff address, all usable RAM banks, cboot-owned reservations, safe FD relocation window, and UART baud at handoff.
-
-The 0x80800000 FD base and 0x80480000 stack values remain unverified placeholders and must not be used for flashing. No BBK A2 memory map, display, eMMC, or watchdog-reset driver is included.
+The previous `0x80800000` FD base and `0x80480000` stack values remain unverified placeholders. Do not package or flash the scaffold.
 
 ## Next milestones
-1. Establish the C21Y cboot handoff contract from read-only stock-device evidence: kernel load address, x0/FDT, usable RAM banks, reserved regions, FD relocation window, and UART settings.
-2. Implement and audit the C21Y memory HOB/DXE heap layout using only verified memory ranges; then rebuild and inspect the FV.
-3. Add the required board-specific platform initialization and boot flow.
+1. Establish the C21Y cboot handoff contract from stock firmware evidence.
+2. Build a C21Y memory HOB/DXE heap layout from verified ranges only.
+3. Add board-specific platform initialization and boot flow.
 4. Build a controlled test payload and perform a non-destructive boot test only after the handoff and recovery path are understood.
-5. Verify XNU kernel entry and early boot logs. A successful EDK2 compile alone is not evidence that XNU boots.
-
-Until these checks are complete, do not package or flash the scaffold.
-
-
-## Stock SPL/U-Boot binary string audit (read-only, 2026-11-22)
-The extracted stock firmware binaries in the SPD DLFiles directory were scanned for printable strings. This is static string evidence only; it does not reveal function implementations or runtime values.
-
-- `u-boot-sign.bin` identifies itself as `U-Boot 2015.07-gd0ac2f1-dirty (Apr 22 2024)` for `SHARKL5PRO`.
-- SPL strings identify `SHARKL5pro ddr init`, `ddr init pass!!!`, DRAM discrete/eMCP status, and an automatic CS1-detection path. These are compiled messages, not proof of the live rank/channel configuration.
-- U-Boot contains strings for `fdt_fixup_ddr_size`, `scan_memory_region`, `fixup_memory_addr`, and `fdt_fixup_memory_region`.
-- Related diagnostics mention `mem_cs`, `mem_cs0_sz`, CS0/CS1 DDR-training reservations, and updates to `/memory` `reg` address and size. It also has format strings for `androidboot.ddrsize=%lldM` and `androidboot.ddrsize.range=%s`.
-- U-Boot strings include `earlycon=sprd_serial,0x70100000,115200n8`, `console=ttyS1`, and `bootcmd=cboot normal`. Treat these as stock boot-path clues; the actual serial handoff settings and FDT contents still need runtime confirmation.
-- The embedded environment string `bootargs=mem=512M ... console=ttyS0` is not the effective Android RAM size or confirmed active kernel command line. Do not copy `mem=512M` into the C21Y UEFI configuration.
-- Attempts to read `/proc/device-tree/memory/reg` and `/sys/firmware/devicetree/base/memory/reg` via unprivileged ADB returned `Permission denied`. The attempted host-side output file was empty; no live FDT bytes were obtained.
-
-Interpretation: stock U-Boot appears to dynamically fix up the FDT memory node and reserve platform memory before entering the Android boot flow. This strengthens the requirement to obtain the final cboot handoff FDT/memory map rather than treating the packaged base DTB as the final map. Static strings alone do not establish bank boundaries, reservation addresses, FDT address, or UEFI/XNU handoff values.
-
-
-## U-Boot memory-fixup source cross-reference (2026-11-22)
-
-A public U-Boot 2015.07 SharkL5Pro/UMS512 BSP source was located for comparison:
-- `Veynamer/bsp_bootloader_u-boot15_sharkl5pro`, commit `eba43fa3542553a7d493edd9c1a47e423b9c5b28`.
-- This is a platform-family source reference, **not yet proven byte-for-byte/source-identical to the Realme C21Y factory U-Boot binary**.
-
-Relevant implementation findings:
-- `fdt_fixup_ddr_size()` (under `CONFIG_DDR_AUTO_DETECT`) obtains `CONFIG_SYS_SDRAM_BASE` and `get_real_ram_size()`, then replaces the `/memory/reg` property with that base and detected size. Thus the packaged DTB's original `/memory/reg` is not necessarily the final Android-kernel memory node.
-- `fdt_fixup_ro_boot_ramsize()` derives `androidboot.ddrsize` from `get_real_ram_size()`; `fdt_fixup_ddrsize_range()` derives the range string from the same value. This matches the observed 4096M and [4096,5120) properties at the behavioral level, but does not independently reveal the physical bank topology.
-- `fdt_fixup_dram_training()` appends `mem_cs` and `mem_cs0_sz` using `get_dram_cs_number()` / `get_dram_cs0_size()`, and adds 4-KiB FDT memreserve entries at `PHYS_SDRAM_1` and, when CS count is 2, `PHYS_SDRAM_1 + CS0 size`.
-- `sprd_fdt_memory.c` implements `sprd,memory-region-auto`: it scans reserved-memory nodes, places auto regions from `DT_ADR`, and shifts later fixed regions forward to avoid overlap. This is a dynamic reserved-memory layout algorithm; exact C21Y node order, `DT_ADR`, and compiled configuration remain unverified.
-
-A second public repository, `TheGammaSqueeze/ums512_spl`, documents an `ums512_1h10` SharkL5Pro SPL bring-up and its secure-world DDR/firewall requirements. It is useful corroborating platform-family research, but its board is not the Realme C21Y and its memory constants must not be copied into this port.
-
-Porting consequence:
-- Do not set UEFI RAM HOBs by simply copying the stock base DTB's 2-GiB `/memory` node, nor assume Android's 4-GiB property proves a single contiguous UEFI-usable range.
-- Still required: confirm the exact C21Y U-Boot's `get_real_ram_size()`, `CONFIG_SYS_SDRAM_BASE`, `DT_ADR`, CS count/CS0 size, final reserved-memory nodes and FDT handoff. The family-source code is a lead for reverse engineering, not authorization to populate a memory map or flash an image.
-
-
-### Additional UMS512_1h10 BSP configuration cross-check
-
-The same public SharkL5Pro BSP's `include/configs/ums512_1h10.h` provides useful clues, with an important mismatch:
-- `PHYS_SDRAM_1 = 0x80000000`, `CONFIG_DDR_AUTO_DETECT`, and `CONFIG_DUAL_DDR` are enabled in that reference configuration.
-- That source's optional second bank is defined at `0x180000000` (6 GiB), with a configured size constant of `0x20000000`. This does **not** match the C21Y Linux zone evidence for a second region beginning at `0x100000000` (4 GiB). It is therefore a different board/configuration detail and must not be copied.
-- Its example `KERNEL_ADR=0x80080000`, `DT_ADR=0x9df00000`, and `RAMDISK_ADR=0xa0000000` are reference-board constants only, not confirmed C21Y runtime load addresses.
-- The family-source `get_dram_cs_number()` and `get_dram_cs0_size()` read a chipram handoff structure at address `0x1c00`. This suggests the SPL-to-U-Boot shared handoff is where CS topology/CS0 size can be sourced, but the structure layout and live values for the C21Y factory build have not yet been verified.
-
-This mismatch is a useful warning: even within UMS512_1h10 / SharkL5Pro, board configuration constants differ. Keep the C21Y memory map conservative until the actual C21Y binary's configuration and live handoff are established.
+5. Verify XNU kernel entry and early boot logs.
