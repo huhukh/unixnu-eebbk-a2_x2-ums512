@@ -32,7 +32,10 @@
 
 [Components]
   # Minimal EDK2 bring-up set. No board display, eMMC, or XNU payload drivers.
-  SiliciumPkg/Sec/Sec.inf
+  SiliciumPkg/Sec/Sec.inf {
+    <LibraryClasses>
+      NULL|MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaCustomDecompressLib.inf
+  }
   SiliciumPkg/Drivers/RamManagerDxe/RamManagerDxe.inf
   EmbeddedPkg/Drivers/DtPlatformDxe/DtPlatformDxe.inf
   MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
