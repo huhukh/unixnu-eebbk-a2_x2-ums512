@@ -27,13 +27,16 @@ assert cfg_data["boot_image"]["pagesize"] == 2048
 assert cfg_data["boot_image_kernel"]["kernel_compression"] == "none"
 
 mem = cfile.read_text()
-assert "GetMemoryMap (" in mem
-assert "0x81FF0000" in mem and "0xFFF80000" in mem
-assert "High RAM" not in mem and "DXE Heap" not in mem
+assert "*MemoryDescriptor = NULL;" in mem
+assert "*MemoryDescriptorCount = 0;" in mem
+# These are EEBBK A2 carve-out addresses, not established C21Y UEFI reservations.
+for borrowed in ("0x87500000", "0x87800000", "0x89000000", "0x89600000", "0x90000000", "0x94000000", "0x94040000", "0xFFF80000"):
+    assert borrowed not in mem, f"unverified/inherited memory range: {borrowed}"
 assert "not bootable" in (root / "uefi/C21Y-UEFI-STATUS.md").read_text().lower()
 assert "C21Y_FD_BASE" in build_script.read_text()
 assert "DO NOT package or flash" in build_script.read_text()
 assert "!include SiliciumPkg/Common.fdf.inc" in fdf.read_text()
 
-print("C21Y UEFI scaffold static audit: PASS")
+print("C21Y UEFI scaffold static safety audit: PASS")
+print("MemoryMapLib is intentionally empty; no RAM is advertised to UEFI.")
 print("NOTE: this does not compile EDK2 and does not validate hardware boot safety.")
