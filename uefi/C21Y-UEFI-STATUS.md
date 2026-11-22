@@ -71,3 +71,17 @@ The 0x80800000 FD base and 0x80480000 stack values remain unverified placeholder
 5. Verify XNU kernel entry and early boot logs. A successful EDK2 compile alone is not evidence that XNU boots.
 
 Until these checks are complete, do not package or flash the scaffold.
+
+
+## Stock SPL/U-Boot binary string audit (read-only, 2026-11-22)
+The extracted stock firmware binaries in the SPD DLFiles directory were scanned for printable strings. This is static string evidence only; it does not reveal function implementations or runtime values.
+
+- `u-boot-sign.bin` identifies itself as `U-Boot 2015.07-gd0ac2f1-dirty (Apr 22 2024)` for `SHARKL5PRO`.
+- SPL strings identify `SHARKL5pro ddr init`, `ddr init pass!!!`, DRAM discrete/eMCP status, and an automatic CS1-detection path. These are compiled messages, not proof of the live rank/channel configuration.
+- U-Boot contains strings for `fdt_fixup_ddr_size`, `scan_memory_region`, `fixup_memory_addr`, and `fdt_fixup_memory_region`.
+- Related diagnostics mention `mem_cs`, `mem_cs0_sz`, CS0/CS1 DDR-training reservations, and updates to `/memory` `reg` address and size. It also has format strings for `androidboot.ddrsize=%lldM` and `androidboot.ddrsize.range=%s`.
+- U-Boot strings include `earlycon=sprd_serial,0x70100000,115200n8`, `console=ttyS1`, and `bootcmd=cboot normal`. Treat these as stock boot-path clues; the actual serial handoff settings and FDT contents still need runtime confirmation.
+- The embedded environment string `bootargs=mem=512M ... console=ttyS0` is not the effective Android RAM size or confirmed active kernel command line. Do not copy `mem=512M` into the C21Y UEFI configuration.
+- Attempts to read `/proc/device-tree/memory/reg` and `/sys/firmware/devicetree/base/memory/reg` via unprivileged ADB returned `Permission denied`. The attempted host-side output file was empty; no live FDT bytes were obtained.
+
+Interpretation: stock U-Boot appears to dynamically fix up the FDT memory node and reserve platform memory before entering the Android boot flow. This strengthens the requirement to obtain the final cboot handoff FDT/memory map rather than treating the packaged base DTB as the final map. Static strings alone do not establish bank boundaries, reservation addresses, FDT address, or UEFI/XNU handoff values.
