@@ -41,6 +41,15 @@ This validates that CI produced a structurally recognizable EDK2 firmware volume
 
 - Attempts to read `/sys/class/block/mmcblk0pN/size` for boot-related partitions via unprivileged ADB returned `Permission denied`; partition capacities remain unknown. Do not infer sizes from partition numbering or symlink targets.
 
+## Fastboot partition capacities (read-only, 2026-11-22)
+Fastboot `getvar partition-size` returned byte counts:
+- `boot_a`: 67,108,864 bytes (64 MiB).
+- `vendor_boot_a`: 104,857,600 bytes (100 MiB).
+- `dtb_a`: 8,388,608 bytes (8 MiB).
+- `dtbo_a`: 8,388,608 bytes (8 MiB).
+- `uboot_a`: 1,048,576 bytes (1 MiB).
+These are partition capacities, not actual image sizes. Only slot A capacities were queried. No writes were performed.
+
 ## Explicitly not bootable / not flashable yet
 This remains a platform scaffold, not a tested boot image. The vendor DTB describes a 2-GiB bank at 0x80000000, while Android runtime zoneinfo indicates additional memory above 4 GiB. The live cboot handoff FDT has not been captured.
 
