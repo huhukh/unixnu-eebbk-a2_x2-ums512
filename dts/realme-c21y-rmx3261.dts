@@ -1,0 +1,20 @@
+/*
+ * Realme C21Y RMX3261 / RMX3263 - experimental UniXNU board description.
+ * SoC family: Unisoc UMS512 / T610 (SharkL5Pro).
+ *
+ * Conservative host-build DTS skeleton. It deliberately does not invent
+ * DRAM banks, reserved-memory ranges, UART register nodes, eMMC, display,
+ * touch, PMIC, Wi-Fi or GPU wiring. Import these from the exact stock C21Y
+ * DTB before using this tree for a hardware boot.
+ */
+/dts-v1/;
+/include/ "ums512.dtsi"
+
+/ {
+    model = "Realme C21Y RMX3261";
+    compatible = "sprd,ums512";
+
+    chosen {
+        bootargs = "console=ttyS1,115200n8";
+    };
+};
