@@ -9,7 +9,7 @@ dengan SoC **Unisoc UMS512 / T610 (S19610AA1)**.
 
 ### Sudah dikonfirmasi dari firmware dan perangkat
 
-- Identitas board stock: `S19610AA1`, cocok dengan overlay DTBO `sprd,S19610AA1`.
+- Identitas hardware yang dilaporkan perangkat: `S19610AA1`; overlay DTBO stock juga berisi compatible board `sprd,S19610AA1`. Boot properties juga melaporkan `ro.boot.board_id=S19610BA1` dan SKU `S19610BA1`; perbedaan label ini perlu direkonsiliasi sebelum dipakai sebagai identitas board tunggal.
 - Base DTB dari `boot.img` berhasil diekstrak dan diparse sebagai FDT v17.
 - SoC: `Unisoc UMS512 SoC`, compatible `sprd,ums512`.
 - CPU: 8 core ARM64 — 6x Cortex-A55 dan 2x Cortex-A75; MPIDR `0x0` sampai `0x700` dengan langkah `0x100`.
@@ -18,6 +18,7 @@ dengan SoC **Unisoc UMS512 / T610 (S19610AA1)**.
 - Display blocks: DPU `0x20300000` ukuran `0x1000`; DSI `0x20400000` ukuran `0x1000`.
 - Base DTB memory node: `0x80000000 + 0x80000000` (2 GiB).
 - FDT live dari perangkat stock berhasil dibaca secara read-only melalui ADB root pada 23 November 2026 (283729 byte, FDT v17). `/memory/reg` live adalah `0x80000000 + 0xfffff000`, satu rentang hampir 4 GiB sampai `0x17fffff000` (eksklusif). Disassembly AArch64 menunjukkan jalur persiapan FDT U-Boot memanggil routine yang mencari `/memory` lalu menyetel `reg` dari ukuran RAM global; detail bukti dan batasnya ada di audit firmware.
+- Boot property read-only `ro.boot.ddrsize=4096M` dan `ro.boot.ddrsize.range=[4096,5120)` menguatkan kapasitas DRAM yang dilaporkan sebagai 4 GiB. Properti ini tidak menentukan bank layout, reserved memory, atau RAM usable UEFI.
 - Android runtime sebelumnya menunjukkan zone DMA mulai `0x80000000` dan zone Normal mulai `0x100000000`. FDT live menggambarkan satu rentang besar; pembagian pada 4 GiB lebih konsisten dengan batas zone kernel daripada bukti dua bank DRAM terpisah. Ini tetap **bukan** peta RAM UEFI yang siap dipakai.
 - Stock DTBO berisi satu overlay board `Unisoc UMS512 1H10 board`, compatible `sprd,S19610AA1`. Overlay menambahkan reservasi logo/framebuffer/face-id/writeback dan konfigurasi perangkat board.
 - FDL2 firmware yang hash-nya cocok dengan berkas handset memuat kode AArch64 serta string `fdt_fixup_ddr_size`, `get real ram size` dan `dram_size_inMB`. Analisis silang referensinya hanya mengonfirmasi pesan/diagnostik terkait; belum membuktikan jalur fixup berhasil berjalan saat boot normal. Lihat [FDL2 RAM/FDT forensic triage](docs/FDL2-RAM-FDT-FORENSICS.md).
@@ -55,6 +56,7 @@ fisik C21Y menjadi iPhone X dan tidak menggantikan board descriptor UMS512.
 - [x] Audit awal DTBO dan board overlay.
 - [x] Kumpulkan bukti runtime Android tentang dua rentang DRAM.
 - [x] Tangkap dan parse FDT live yang digunakan Android melalui ADB read-only.
+- [x] Catat properti boot read-only yang melaporkan kapasitas DRAM 4 GiB.
 - [x] Triase statis FDL2 stock: string DRAM/FDT dan referensinya dicatat; jalur sukses runtime belum terbukti.
 - [ ] Identifikasi komponen boot-chain yang melakukan memory-size fixup dan cocokkan reservasi FDT dengan ownership firmware.
 - [ ] Rekonsiliasi semua reserved-memory dan firmware ownership.
@@ -67,7 +69,7 @@ fisik C21Y menjadi iPhone X dan tidak menggantikan board descriptor UMS512.
 ## Dokumen teknis
 
 - [Stock firmware audit](docs/stock-firmware-audit.md) — hasil DTB/DTBO, CPU/GIC/UART/display, RAM dan reserved memory.
-- [FDL2 RAM/FDT forensic triage](docs/FDL2-RAM-FDT-FORENSICS.md) — identitas berkas firmware, string, AArch64 reference, dan batas kesimpulan.
+- [FDL2 RAM/FDT forensic triage](docs/FDL2-RAM-FDT-FORENSICS.md) — identitas berkas firmware, string, AArch64 reference, boot properties dan batas kesimpulan.
 - [HackiOS C21Y adaptation](docs/HACKIOS-C21Y-PORT-ADAPTATION.md) — pemetaan arsitektur HackiOS ke board C21Y dan blocker implementasi.
 
 ## Safety
