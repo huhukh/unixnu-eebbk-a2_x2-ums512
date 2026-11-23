@@ -251,6 +251,16 @@ This layout is consistent with chipram DDR/CS metadata, but the field names
 and its init-table invocation have not been independently proven. Treat that
 interpretation as a strong lead, not a resolved ABI.
 
+
+
+A follow-up byte-aligned AArch64 sweep of the U-Boot payload found no direct
+`BL`/`B` instruction targeting `0x34a0` and no literal 32/64-bit payload pointer
+`0x34a0`. This does not exclude an indirect callback/init-table path, and it is
+not proof that the parser is dead code. The routine's invocation and the
+producer of the global RAM-size value therefore remain unresolved. The next
+static-analysis gate is to trace the initialization/callback tables and all
+writes to that global, then match the result to the normal boot path.
+
 Although the FDL2 and U-Boot code payloads match exactly, this does not mean
 the download-loader stage runs during a normal phone boot. The normal-boot
 evidence comes from the `u-boot-sign.bin` image and its traced U-Boot
