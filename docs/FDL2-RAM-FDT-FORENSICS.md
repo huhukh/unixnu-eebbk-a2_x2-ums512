@@ -13,6 +13,23 @@ Read-only analysis of the handset firmware FDL2:
 - The byte sequence `7f 45 4c 46` occurs at offset `0x94c9a` inside the image, but the following bytes are printable text (`\0sprd_dump\0...`). It is not an ELF header and must not be used to infer a load address or architecture.
 - AArch64 disassembly is plausible in executable-looking regions; this is a static triage, not a full image unpack or symbolized reverse engineering.
 
+## Read-only runtime properties
+
+On 2026-11-23, ADB identified the connected handset as `RMX3261`. Read-only Android boot properties returned:
+
+| Property | Value |
+| --- | --- |
+| `ro.boot.ddrsize` | `4096M` |
+| `ro.boot.ddrsize.range` | `[4096,5120)` |
+| `ro.boot.hardware` | `S19610AA1` |
+| `ro.boot.board_id` | `S19610BA1` |
+| `ro.boot.product.hardware.sku` | `S19610BA1` |
+| `ro.boot.slot_suffix` | `_a` |
+| `ro.boot.dynamic_partitions` | `true` |
+| `ro.boot.vbmeta.device_state` | `unlocked` |
+
+The boot properties corroborate a reported 4 GiB DRAM capacity. They do not disclose the physical bank layout, firmware reservations, or a UEFI memory map. The `S19610AA1` hardware property and `S19610BA1` board/SKU properties differ; reconcile these with the stock DTBO and board descriptors before hard-coding board identity. `/proc/cmdline` was permission denied and `/proc/bootconfig` was absent to the unprivileged ADB shell; no access escalation was attempted.
+
 ## Findings
 
 The image contains:
@@ -28,7 +45,7 @@ An AArch64 PC-relative reference at file offsets `0x51f64–0x51f68` resolves to
 
 ## Conclusion for the port
 
-This artifact strengthens the evidence that the handset's firmware includes DDR/FDT-related code for the S19610AA1 family. Combined with the live Android FDT and the referenced U-Boot implementation documented in [stock-firmware-audit.md](stock-firmware-audit.md), it supports the hypothesis that the boot chain updates the FDT memory node from detected DRAM size.
+This artifact strengthens the evidence that the handset's firmware includes DDR/FDT-related code for the S19610AA1 family. The runtime boot property independently reports 4 GiB. Combined with the live Android FDT and the referenced U-Boot implementation documented in [stock-firmware-audit.md](stock-firmware-audit.md), this supports the hypothesis that the boot chain updates the FDT memory node from detected DRAM size.
 
 It does **not** establish:
 
@@ -42,4 +59,4 @@ Keep `MemoryMapLib` fail-closed until those are measured or derived from the act
 
 ## Reproduction
 
-On the Windows host, use a read-only SHA-256 check and a binary parser/disassembler. Record file offsets and distinguish strings from executable cross-references. Do not flash or execute FDL2 as part of this analysis.
+On the Windows host, use a read-only SHA-256 check and a binary parser/disassembler. Record file offsets and distinguish strings from executable cross-references. Read the boot properties with `adb shell getprop <property>`. Do not flash or execute FDL2 as part of this analysis.
