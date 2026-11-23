@@ -1,0 +1,61 @@
+name: C21Y build monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  issues: write
+
+concurrency:
+  group: c21y-build-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check latest C21Y build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: port/realme-c21y-rmx3261
+          BUILD_WORKFLOW_ID: '421430805'
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${REPOSITORY}/actions/workflows/${BUILD_WORKFLOW_ID}/runs?branch=${BRANCH}&per_page=1"
+          response="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "${api}")"
+          run_id="$(jq -r '.workflow_runs[0].id // empty' <<< "${response}")"
+          status="$(jq -r '.workflow_runs[0].status // "not_found"' <<< "${response}")"
+          conclusion="$(jq -r '.workflow_runs[0].conclusion // "none"' <<< "${response}")"
+          run_url="$(jq -r '.workflow_runs[0].html_url // empty' <<< "${response}")"
+          run_name="$(jq -r '.workflow_runs[0].display_title // "No build run found"' <<< "${response}")"
+
+          {
+            echo "## Realme C21Y XNU build monitor"
+            echo ""
+            echo "- Latest build: ${run_name}"
+            echo "- Run ID: ${run_id:-none}"
+            echo "- Status: ${status}"
+            echo "- Conclusion: ${conclusion}"
+            echo "- URL: ${run_url:-none}"
+            echo "- Checked at: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [ "${status}" = "not_found" ]; then
+            echo "No C21Y build workflow run found."
+            exit 0
+          fi
+
+          if [ "${status}" = "completed" ] && [ "${conclusion}" != "success" ]; then
+            title="C21Y build failed: run ${run_id}"
+            existing="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPOSITORY}/issues?state=open&per_page=100")"
+            already_open="$(jq --arg title "${title}" '[.[] | select(.title == $title)] | length' <<< "${existing}")"
+            if [ "${already_open}" = "0" ]; then
+              body="The scheduled monitor detected a failed C21Y XNU build.\n\n- Status: ${status}\n- Conclusion: ${conclusion}\n- Run: ${run_url}\n\nPlease inspect the failed job logs. This monitor does not flash or modify the device."
+              jq -n --arg title "${title}" --arg body "${body}" '{title:$title, body:$body}' |
+                curl -fsSL -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "Content-Type: application/json" --data-binary @- "https://api.github.com/repos/${REPOSITORY}/issues"
+            fi
+          fi
