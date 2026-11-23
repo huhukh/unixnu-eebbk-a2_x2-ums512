@@ -110,34 +110,28 @@ or assume the overlay's framebuffer reservation is a working GOP surface.
 
 ## Why the current UniXNU branch is not automatically HackiOS-compatible
 
-The existing C21Y repository uses the UniXNU board/defconfig/profile resolver
-and currently selects an iPadOS 17.7.11 profile. HackiOS uses a different XNU
-tree, loader ABI, payload format, userland build, UEFI shim and per-device
-configuration system. Changing only `os_profile` or copying a `.conf`
-does not switch the kernel implementation to HackiOS iOS 16.5.
+The existing C21Y branch is a UniXNU device tree and UEFI scaffold; it is not yet a HackiOS XNU build. The target request remains XNU 8796.121.2 / iOS 16.5, and the branch should be brought into alignment before a kernel build is claimed.
 
-For an actual HackiOS experiment, port the C21Y hardware into a separate
-HackiOS worktree first. Keep the existing UniXNU branch intact until the
-HackiOS loader and UEFI can be built and audited independently.
+## Current build-target audit — 2026-11-23
+
+The branch currently has a material target mismatch:
+
+- `board.toml` and `porting.toml` select `ipados-17.7.11-21H461`; `board.toml` also selects `os:configs/ipados.config`.
+- `patches/xnu/series` includes `xnu-10063.141.1-security-init.patch` and `xnu-10063.141.1-sparse-index.patch`, alongside a C21Y SDHCI personality patch. Those 10063 patches are not evidence of compatibility with XNU 8796.121.2.
+- `components/SdhciBlock.toml` advertises the iPadOS 17.7.11 ABI.
+- `.github/workflows/build.yml` resolves the UniXNU configuration, compiles the DTS and builds an EDK2 C21Y scaffold. It does not compile the requested XNU kernel.
+
+Therefore the current successful Actions run is not a HackiOS/XNU 8796.121.2 kernel build and the existing profile must not be used to produce a C21Y XNU payload.
 
 ## Next gates, in order
 
-1. Obtain/validate the final live C21Y FDT after bootloader fixups and
-   correctly apply the stock DTBO overlay.
-2. Establish exact boot-shim/UEFI load address, firmware size and reserved
-   memory ownership.
-3. Reconcile all RAM banks and carve-outs; Android's 4 GiB coverage is not
-   equivalent to 4 GiB of free conventional memory.
-4. Build a C21Y UEFI target and prove it starts the loader without writing
-   partitions.
-5. Add the C21Y loader platform and confirm GIC, CPU topology and framebuffer
-   at runtime.
-6. Bring up XNU with logging/framebuffer only; add touch, storage and other
-   drivers separately.
-7. Only after a repeatable RAM-only boot should a boot image be considered.
+1. Align the device repository with iOS 16.5 build 20F66 and the exact XNU tag 8796.121.2; supply the OS profile and config fragment required by the UniXNU resolver.
+2. Audit and rebase the selected XNU patch series onto 8796.121.2, then add a GitHub Actions job that actually compiles that kernel and preserves build logs/artifacts.
+3. Keep the UEFI memory map fail-closed until FD/firmware placement, stack/heap, FDT lifetime and every firmware-owned range have been established.
+4. Determine a supported RAM-only entry path. Static strings in the signed U-Boot image do not yet prove that its fastboot implementation accepts a `boot` command; this needs a read-only fastboot check.
+5. Only after the loader can start safely, bring up C21Y GIC/PSCI/UART, then attempt XNU with serial logging and collect direct boot evidence.
 
 **Do not flash incomplete firmware.**
-
 ## Upstream references
 
 - HackiOS kernel and loader: https://github.com/JosephMontfort/hackios-xnu-kernel
