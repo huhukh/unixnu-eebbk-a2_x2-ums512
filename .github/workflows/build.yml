@@ -119,6 +119,12 @@ jobs:
           test -f "$UNIXNU_DIR/unixnu"
           test -d "$UNIXNU_DIR/package"
 
+      - name: Install iOS 16.5 OS profile
+        run: |
+          set -eux
+          bash "$GITHUB_WORKSPACE/scripts/install-os-profile.sh" "$GITHUB_WORKSPACE/$UNIXNU_DIR"
+          test -f "$UNIXNU_DIR/profiles/os/ios-16.5-20F66/profile.toml"
+
       - name: Resolve C21Y defconfig
         run: |
           set -eux
@@ -203,6 +209,15 @@ jobs:
             build/realme-c21y-rmx3261-compiled.dts
 
           ls -lh build/
+
+      - name: Build native XNU kernel
+        run: |
+          set -eux
+          cd "$UNIXNU_DIR"
+          python3 ./unixnu build kernel \
+            -D "$GITHUB_WORKSPACE" \
+            --out "$GITHUB_WORKSPACE/$OUTPUT_DIR"
+          find "$GITHUB_WORKSPACE/$OUTPUT_DIR" -type f -path "*/kernel/kernel.macho" -size +0c -print -quit | grep .
 
       - name: Upload build-check artifacts
         if: always()
