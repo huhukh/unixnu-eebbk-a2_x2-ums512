@@ -4,7 +4,7 @@ schema_version = 1
 [device]
 name = "realme-c21y-rmx3261"
 soc = "UMS512"
-os_profile = "ipados-17.7.11-21H461"
+os_profile = "ios-16.5-20F66"
 summary = "Realme C21Y RMX3261 (S19610AA1), Unisoc T610 / UMS512, board ums512_1h10. Experimental UniXNU port. Host build and real-hardware boot are separate milestones."
 
 [[area]]
@@ -24,8 +24,8 @@ configuration = [
   "SoC source: ums512, selected through the local source configuration until a public immutable commit is available.",
   "Kernel defconfig: realme-c21y-rmx3261_defconfig.",
   "Device tree: dts/realme-c21y-rmx3261.dts.",
-  "Configuration fragments: arch:configs/common.config, soc:configs/ums512.config, os:configs/ipados.config.",
-  "Patch series: arch, soc and device patch roots."
+  "Configuration fragments: arch:configs/common.config, soc:configs/ums512.config, os:configs/ios.config.",
+  "Patch series: UMS512 SoC, iOS 16.5 OS profile (XNU 8796 rebased compatibility series), and C21Y device roots."
 ]
 procedure = [
   "Resolve the local UMS512 SoC source.",
@@ -37,7 +37,7 @@ findings = [
   "C21Y device references identify the board platform as ums512_1h10.",
   "The device uses the Unisoc UMS512 / T610 family.",
   "The community device tree uses an Android boot image header version 2.",
-  "The operating-system profile remains a development placeholder until a compatible XNU build and OS identity are selected."
+  "The board now selects iOS 16.5 (20F66), XNU 8796.121.2 and the iPhone10,3 / D22AP software identity; hardware compatibility remains unproven."
 ]
 completion = [
   "All selected sources resolve.",
@@ -51,7 +51,7 @@ limits = [
   "No successful C21Y hardware boot has been established."
 ]
 next_action = [
-  "Validate defconfig, DTS compilation and source resolution before building the firmware."
+  "Run GitHub Actions XNU 8796 native-kernel build and resolve the first patch/build failure."
 ]
 evidence = [
   { kind = "source", reference = "https://github.com/serzhbsv/android_device_realme_RMX3261", result = "Community Realme C21Y device tree reference." },
