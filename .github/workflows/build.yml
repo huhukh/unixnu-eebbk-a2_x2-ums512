@@ -18,7 +18,7 @@ env:
 
 jobs:
   linux-build-check:
-    name: Linux - C21Y configuration and DTS
+    name: Linux - C21Y XNU 8796 build and DTS
     runs-on: ubuntu-22.04
     timeout-minutes: 60
 
@@ -215,6 +215,7 @@ jobs:
           set -eux
           cd "$UNIXNU_DIR"
           python3 ./unixnu build kernel \
+            --skip-prelink \
             -D "$GITHUB_WORKSPACE" \
             --out "$GITHUB_WORKSPACE/$OUTPUT_DIR"
           find "$GITHUB_WORKSPACE/$OUTPUT_DIR" -type f -path "*/kernel/kernel.macho" -size +0c -print -quit | grep .
@@ -226,6 +227,7 @@ jobs:
           name: realme-c21y-build-check
           path: |
             build/
+            out/**/kernel/kernel.macho
             status.json
           if-no-files-found: warn
           retention-days: 7
