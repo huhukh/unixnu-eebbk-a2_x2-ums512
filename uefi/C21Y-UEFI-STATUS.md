@@ -27,10 +27,17 @@ exposed by the running Android kernel:
   so the 4 GiB split is consistent with a Linux zone boundary and does not
   establish two physical DRAM banks.
 
-The live FDT proves that the tree used by the running Android kernel contains
-a memory-size change from the base DTB. This supports a boot-chain FDT fixup,
-but does not identify the component that performed it; FDL2 strings alone do
-not prove that FDL2 participates in the normal boot path.
+Static AArch64 disassembly of the stock `u-boot-sign.bin` traces the
+normal U-Boot image-preparation path through a fixup group that calls code
+which finds `/memory` and writes `reg` using the global RAM-size value.
+The U-Boot and FDL2 DHTB code payloads are byte-identical, but this does not
+mean the FDL2 download stage executes in normal boot. A separate code body
+reads a magic and size-count fields from `0x82000000), consistent with
+chipram DDR metadata; its exact ABI and init-table invocation remain unproven.
+
+The captured live FDT's `/memory/reg` matches this fixup mechanism. The
+mechanism is now evidenced in the U-Boot image; exact FD/stack/heap placement,
+firmware ownership, and a safe UEFI map are still unresolved.
 
 Do not infer a UEFI memory map from the live `/memory/reg` alone. Firmware,
 secure-world, modem/DSP, bootloader, and relocation ownership still need to be
