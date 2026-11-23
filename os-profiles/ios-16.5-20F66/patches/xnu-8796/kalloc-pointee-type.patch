@@ -1,0 +1,53 @@
+diff --git a/libkern/os/alloc_util.h b/libkern/os/alloc_util.h
+index a494a52626a2..2dbc4b13ec73 100644
+--- a/libkern/os/alloc_util.h
++++ b/libkern/os/alloc_util.h
+@@ -72,4 +72,28 @@ extern "C++" {
+ 	__elem;                                                   \
+ })
+ 
++/*!
++ * @macro os_get_pointee_type
++ *
++ * @abstract
++ * Get the type pointed to by @c ptr.
++ *
++ * @discussion
++ * C++ forbids dereferencing a void pointer, and current clang (D150875) rejects it even inside __typeof__.
++ * Backported from xnu-10063 (libkern/os/alloc_util.h): safe with any pointer, from C and from C++.
++ *
++ * @param ptr           the pointer we want to get the pointee's type for
++ */
++#if defined(__cplusplus) && __has_builtin(__remove_pointer) && \
++        __has_builtin(__remove_reference_t)
++#define os_get_pointee_type(ptr)                               \
++	__remove_pointer(__remove_reference_t(__typeof__(ptr)))
++#else
++#define os_get_pointee_type(ptr)                                      \
++	_Pragma("clang diagnostic push")                               \
++	_Pragma("clang diagnostic ignored \"-Wvoid-ptr-dereference\"") \
++	__typeof__(*(ptr))                                             \
++	_Pragma("clang diagnostic pop")
++#endif
++
+ #endif /* _OS_ALLOC_UTIL_H */
+diff --git a/osfmk/kern/kalloc.h b/osfmk/kern/kalloc.h
+index dfa89c7b0d29..5cf9e0f4cf09 100644
+--- a/osfmk/kern/kalloc.h
++++ b/osfmk/kern/kalloc.h
+@@ -821,12 +821,9 @@ __options_decl(kt_granule_t, uint32_t, {
+  * @param ptr           the pointer whose type needs to be checked.
+  * @param type          the type which the pointer will be checked against.
+  */
+-#define KALLOC_TYPE_IS_COMPATIBLE_PTR(ptr, type)                   \
+-	_Pragma("clang diagnostic push")                               \
+-	_Pragma("clang diagnostic ignored \"-Wvoid-ptr-dereference\"") \
+-	(__builtin_xnu_types_compatible(__typeof__(*(ptr)), type) ||   \
+-	    __builtin_xnu_types_compatible(__typeof__(*(ptr)), void))  \
+-	_Pragma("clang diagnostic pop")
++#define KALLOC_TYPE_IS_COMPATIBLE_PTR(ptr, type)                         \
++	(__builtin_xnu_types_compatible(os_get_pointee_type(ptr), type) ||   \
++	    __builtin_xnu_types_compatible(os_get_pointee_type(ptr), void))
+ 
+ #define KALLOC_TYPE_ASSERT_COMPATIBLE_POINTER(ptr, type) \
+ 	_Static_assert(KALLOC_TYPE_IS_COMPATIBLE_PTR(ptr, type), \
