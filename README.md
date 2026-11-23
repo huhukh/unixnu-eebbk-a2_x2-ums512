@@ -5,7 +5,7 @@ dengan SoC **Unisoc UMS512 / T610 (S19610AA1)**.
 
 > **Status: bring-up hardware dan audit firmware. Belum bootable. Jangan flash artefak dari branch ini.**
 
-## Perkembangan terakhir — 22 November 2026
+## Perkembangan terakhir — 23 November 2026
 
 ### Sudah dikonfirmasi dari firmware dan perangkat
 
@@ -17,7 +17,8 @@ dengan SoC **Unisoc UMS512 / T610 (S19610AA1)**.
 - UART stock console: `0x70100000`, status `okay`; UART kedua `0x70000000`.
 - Display blocks: DPU `0x20300000` ukuran `0x1000`; DSI `0x20400000` ukuran `0x1000`.
 - Base DTB memory node: `0x80000000 + 0x80000000` (2 GiB).
-- Android runtime sebelumnya menunjukkan dua populated memory zones: sekitar 2 GiB mulai `0x80000000` dan hampir 2 GiB mulai `0x100000000`. Ini membuktikan cakupan RAM runtime sekitar 4 GiB, **bukan** peta RAM UEFI yang siap dipakai.
+- FDT live dari perangkat stock berhasil dibaca secara read-only melalui ADB root pada 23 November 2026 (283729 byte, FDT v17). `/memory/reg` live adalah `0x80000000 + 0xfffff000`, satu rentang hampir 4 GiB sampai `0x17fffff000` (eksklusif). FDT live berbeda dari base DTB; detail dan batas atribusi fixup ada di audit firmware.
+- Android runtime sebelumnya menunjukkan zone DMA mulai `0x80000000` dan zone Normal mulai `0x100000000`. FDT live menggambarkan satu rentang besar; pembagian pada 4 GiB lebih konsisten dengan batas zone kernel daripada bukti dua bank DRAM terpisah. Ini tetap **bukan** peta RAM UEFI yang siap dipakai.
 - Stock DTBO berisi satu overlay board `Unisoc UMS512 1H10 board`, compatible `sprd,S19610AA1`. Overlay menambahkan reservasi logo/framebuffer/face-id/writeback dan konfigurasi perangkat board.
 
 Rincian, rentang alamat, reserved-memory, dan batas bukti dicatat di
@@ -26,7 +27,7 @@ Rincian, rentang alamat, reserved-memory, dan batas bukti dicatat di
 ### Implementasi yang masih belum selesai
 
 - C21Y-specific UEFI/EDK2 platform package dan MemoryMapLib.
-- Final live FDT hasil bootloader dan peta DRAM/reservasi yang dipakai saat handoff.
+- Rekonsiliasi FDT live yang sudah ditangkap dengan ownership firmware dan kontrak handoff C21Y.
 - FD/firmware load address, payload window, stack/heap dan ownership setiap carve-out.
 - UEFI GOP/framebuffer handoff yang terukur.
 - Driver/bring-up C21Y untuk touch, storage, power, radio, audio dan GPU.
@@ -51,7 +52,8 @@ fisik C21Y menjadi iPhone X dan tidak menggantikan board descriptor UMS512.
 - [x] Identifikasi CPU, GICv3, UART, DPU dan DSI dari base DTB.
 - [x] Audit awal DTBO dan board overlay.
 - [x] Kumpulkan bukti runtime Android tentang dua rentang DRAM.
-- [ ] Dapatkan/validasi live FDT final dari bootloader.
+- [x] Tangkap dan parse FDT live yang digunakan Android melalui ADB read-only.
+- [ ] Identifikasi komponen boot-chain yang melakukan memory-size fixup dan cocokkan reservasi FDT dengan ownership firmware.
 - [ ] Rekonsiliasi semua reserved-memory dan firmware ownership.
 - [ ] Tetapkan alamat UEFI FD, stack, heap dan payload berdasarkan bukti.
 - [ ] Implementasikan C21Y UEFI MemoryMapLib dan platform package.
