@@ -214,10 +214,48 @@ TOS `reg` differs from the base tree. Do not infer that omitted ranges are
 available to UEFI; reconcile the live tree with firmware ownership and the
 actual handoff before building descriptors.
 
-The live FDT change proves the effective tree differs from the raw base DTB.
-It does not prove that FDL2 performs the fixup: FDL2 contains strings such as
-`fdt_fixup_ddr_size` and `get real ram size`, but no disassembly/call graph
-has established that those routines run in the phone's normal boot path.
+### U-Boot static disassembly evidence
+
+The signed `u-boot-sign.bin` and `fdl2-sign.bin` files both have a DHTB
+header and a `0xd8a30`-byte payload starting at file offset `0x200`.
+Their headers and code payloads are byte-identical; the payload SHA-256 is
+`7436c1bf6ee9bb04c95ae7f521d0f0f0f5c57d8fb8125698e717719273c7e235`.
+The 692-byte signature trailers differ. The U-Boot file SHA-256 is
+`37e01de6b0d87df33ba1e4258b54bf6a6d71805c2da606d949383cfaf22d2f5d`;
+the FDL2 file SHA-256 is
+`c1dbff5b6f1d8c91ae3f8e4ae59df54a0bfc35611b5fb60b72c8dcd4a1cd2922`.
+The payload disassembles as AArch64. Offsets below are relative to the start
+of that DHTB payload, not physical load addresses.
+
+The normal U-Boot image-preparation path at payload offset `0x1f114`
+passes its FDT pointer to the fixup group at `0x1cb74`. That group calls the
+routine at `0x2162c`. Its instructions:
+- read a 64-bit RAM-size value through helper `0x3460`;
+- find the `/memory` node and its `reg` property;
+- set the first 8-byte cell to the big-endian encoding of base
+  `0x80000000`;
+- append the big-endian 64-bit RAM size to `reg`.
+
+The relevant property helpers at `0x69110` and `0x69164` were also
+disassembled: the first replaces the property data and the second grows it
+and appends data. This code path matches the captured live FDT's one-range
+`/memory/reg` and is direct evidence that normal U-Boot image preparation
+updates the memory description. It still does not establish U-Boot's load
+address or make that whole range safe for UEFI allocation.
+
+A separate code body at payload offset `0x34a0` checks a magic value at
+`0x82000000`, reads a count at offset `+0x20`, and on count 1 or 2 reads
+64-bit values at `+0x28` and optionally `+0x30`, summing the latter case
+before storing the result to the global later read by helper `0x3460`.
+This layout is consistent with chipram DDR/CS metadata, but the field names
+and its init-table invocation have not been independently proven. Treat that
+interpretation as a strong lead, not a resolved ABI.
+
+Although the FDL2 and U-Boot code payloads match exactly, this does not mean
+the download-loader stage runs during a normal phone boot. The normal-boot
+evidence comes from the `u-boot-sign.bin` image and its traced U-Boot
+image-preparation call path. The live FDT confirms the resulting memory
+description; no firmware was executed or modified during this analysis.
 
 
 
