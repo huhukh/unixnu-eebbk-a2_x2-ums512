@@ -1,6 +1,6 @@
 # XNU patch series for Unisoc UMS512 / SharkL5Pro.
 #
-# The kernel source is xnu-10063.141.1 (the iPadOS 17.7.11 profile pins it).
+# The C21Y port selects xnu-8796.121.2 (iOS 16.5). Each patch must apply to that exact source revision.
 # Two patches are needed on top of the UniXNU core series:
 #
 #   ums512-uart                  - polled SPRD UART console (0x70100000). Without
