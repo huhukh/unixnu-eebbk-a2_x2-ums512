@@ -5,7 +5,7 @@ schema_version = 2
 name = "realme-c21y-rmx3261"
 soc = "UMS512"
 soc_source = "ums512"
-os_profile = "ipados-17.7.11-21H461"
+os_profile = "ios-16.5-20F66"
 kit = "realme-c21y-rmx3261"
 description = "Realme C21Y RMX3261 (S19610AA1, Unisoc T610)"
 
@@ -27,12 +27,12 @@ defconfig = "realme-c21y-rmx3261_defconfig"
 config_fragments = [
   "arch:configs/common.config",
   "soc:configs/ums512.config",
-  "os:configs/ipados.config"
+  "os:configs/ios.config"
 ]
 
 patch_series = [
-  "arch:patches/xnu/series",
   "soc:patches/xnu/series",
+  "os:patches/xnu/series",
   "device:patches/xnu/series"
 ]
 
