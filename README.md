@@ -17,7 +17,7 @@ dengan SoC **Unisoc UMS512 / T610 (S19610AA1)**.
 - UART stock console: `0x70100000`, status `okay`; UART kedua `0x70000000`.
 - Display blocks: DPU `0x20300000` ukuran `0x1000`; DSI `0x20400000` ukuran `0x1000`.
 - Base DTB memory node: `0x80000000 + 0x80000000` (2 GiB).
-- FDT live dari perangkat stock berhasil dibaca secara read-only melalui ADB root pada 23 November 2026 (283729 byte, FDT v17). `/memory/reg` live adalah `0x80000000 + 0xfffff000`, satu rentang hampir 4 GiB sampai `0x17fffff000` (eksklusif). FDT live berbeda dari base DTB; detail dan batas atribusi fixup ada di audit firmware.
+- FDT live dari perangkat stock berhasil dibaca secara read-only melalui ADB root pada 23 November 2026 (283729 byte, FDT v17). `/memory/reg` live adalah `0x80000000 + 0xfffff000`, satu rentang hampir 4 GiB sampai `0x17fffff000` (eksklusif). Disassembly AArch64 menunjukkan jalur persiapan FDT U-Boot memanggil routine yang mencari `/memory` lalu menyetel `reg` dari ukuran RAM global; detail bukti dan batasnya ada di audit firmware.
 - Android runtime sebelumnya menunjukkan zone DMA mulai `0x80000000` dan zone Normal mulai `0x100000000`. FDT live menggambarkan satu rentang besar; pembagian pada 4 GiB lebih konsisten dengan batas zone kernel daripada bukti dua bank DRAM terpisah. Ini tetap **bukan** peta RAM UEFI yang siap dipakai.
 - Stock DTBO berisi satu overlay board `Unisoc UMS512 1H10 board`, compatible `sprd,S19610AA1`. Overlay menambahkan reservasi logo/framebuffer/face-id/writeback dan konfigurasi perangkat board.
 
