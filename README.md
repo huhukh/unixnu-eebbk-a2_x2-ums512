@@ -26,7 +26,8 @@ Rincian, rentang alamat, reserved-memory, dan batas bukti dicatat di
 
 ### Implementasi yang masih belum selesai
 
-- C21Y-specific UEFI/EDK2 platform package dan MemoryMapLib.
+- Penyelesaian platform UEFI/EDK2 C21Y dan MemoryMapLib.
+- Scaffold C21Y belum memuat GOP, eMMC block I/O, atau aplikasi/loader XNU; UART/framebuffer debug yang diwarisi juga masih memiliki asumsi panel board A2.
 - Rekonsiliasi FDT live yang sudah ditangkap dengan ownership firmware dan kontrak handoff C21Y.
 - FD/firmware load address, payload window, stack/heap dan ownership setiap carve-out.
 - UEFI GOP/framebuffer handoff yang terukur.
