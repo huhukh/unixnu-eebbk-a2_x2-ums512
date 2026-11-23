@@ -21,7 +21,7 @@ dengan SoC **Unisoc UMS512 / T610 (S19610AA1)**.
 - Boot property read-only `ro.boot.ddrsize=4096M` dan `ro.boot.ddrsize.range=[4096,5120)` menguatkan kapasitas DRAM yang dilaporkan sebagai 4 GiB. Properti ini tidak menentukan bank layout, reserved memory, atau RAM usable UEFI.
 - Android runtime sebelumnya menunjukkan zone DMA mulai `0x80000000` dan zone Normal mulai `0x100000000`. FDT live menggambarkan satu rentang besar; pembagian pada 4 GiB lebih konsisten dengan batas zone kernel daripada bukti dua bank DRAM terpisah. Ini tetap **bukan** peta RAM UEFI yang siap dipakai.
 - Stock DTBO berisi satu overlay board `Unisoc UMS512 1H10 board`, compatible `sprd,S19610AA1`. Overlay menambahkan reservasi logo/framebuffer/face-id/writeback dan konfigurasi perangkat board.
-- FDL2 firmware yang hash-nya cocok dengan berkas handset memuat kode AArch64 serta string `fdt_fixup_ddr_size`, `get real ram size` dan `dram_size_inMB`. Analisis silang referensinya hanya mengonfirmasi pesan/diagnostik terkait; belum membuktikan jalur fixup berhasil berjalan saat boot normal. Lihat [FDL2 RAM/FDT forensic triage](docs/FDL2-RAM-FDT-FORENSICS.md).
+- Paket firmware memuat `u-boot-sign.bin` berperan `UBOOTLOADER`; byte-nya sama dengan FDL2 kecuali 256 byte di trailer. U-Boot image-preparation path dan live FDT mendukung bahwa U-Boot normal-boot memperbarui node RAM; kapasitas runtime dilaporkan `4096M`. Ini tetap bukan memory map UEFI atau rentang RAM usable. Lihat [FDL2 RAM/FDT forensic triage](docs/FDL2-RAM-FDT-FORENSICS.md) dan [stock firmware audit](docs/stock-firmware-audit.md).
 
 Rincian, rentang alamat, reserved-memory, dan batas bukti dicatat di
 [`docs/stock-firmware-audit.md`](docs/stock-firmware-audit.md).
