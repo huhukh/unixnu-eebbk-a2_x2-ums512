@@ -2,7 +2,7 @@
 
 ## What exists
 - Separate EDK2 platform package: `Platforms/Unisoc/c21yPkg`.
-- Separate C21Y memory-map library, currently **fail-closed and empty**. It advertises no RAM to UEFI because the C21Y live FDT, firmware-owned ranges, and relocation window are not established.
+- Separate C21Y memory-map library, currently **fail-closed and empty**. It advertises no RAM to UEFI because the live FDT alone does not establish firmware-owned ranges, the FD relocation window, or safe stack/heap placement.
 - Separate C21Y boot configuration and build script.
 - UMS512 SoC-wide GIC/timer/UART definitions reused from the shared UMS512 package.
 - CI performs an EDK2 firmware-volume compile for the C21Y scaffold.
@@ -32,7 +32,7 @@ normal U-Boot image-preparation path through a fixup group that calls code
 which finds `/memory` and writes `reg` using the global RAM-size value.
 The U-Boot and FDL2 DHTB code payloads are byte-identical, but this does not
 mean the FDL2 download stage executes in normal boot. A separate code body
-reads a magic and size-count fields from `0x82000000), consistent with
+reads a magic and size-count fields from `0x82000000`, consistent with
 chipram DDR metadata; its exact ABI and init-table invocation remain unproven.
 
 The captured live FDT's `/memory/reg` matches this fixup mechanism. The
@@ -56,10 +56,10 @@ The following remain unknown:
 - safe FD relocation window and stack/heap placement;
 - UART settings at the firmware handoff.
 
-The previous `0x80800000` FD base and `0x80480000` stack values remain unverified placeholders. Do not package or flash the scaffold.
+The C21Y DSC still sets `PcdCPUCoresStackBase` to `0x80480000`; this is unverified. The shared UMS512 header also contains `FD_BASE=0x80800000`, while the C21Y build script requires an externally measured `C21Y_FD_BASE`. Do not treat either address as validated or package/flash the scaffold.
 
 ## Next milestones
-1. Establish the C21Y cboot handoff contract and identify which boot-chain stage performs the live FDT memory-size fixup.
+1. Trace how the chipram size metadata is initialized, then establish the exact C21Y cboot load and FDT handoff contract.
 2. Build a C21Y memory HOB/DXE heap layout from verified ranges only.
 3. Add board-specific platform initialization and boot flow.
 4. Build a controlled test payload and perform a non-destructive boot test only after the handoff and recovery path are understood.
