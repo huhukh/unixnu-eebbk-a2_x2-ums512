@@ -29,8 +29,9 @@ Rincian, rentang alamat, reserved-memory, dan batas bukti dicatat di
 ### Implementasi yang masih belum selesai
 
 - Penyelesaian platform UEFI/EDK2 C21Y dan MemoryMapLib.
-- Profil repo masih memilih iPadOS 17.7.11 dan patch XNU 10063.141.1; ini belum sesuai target iOS 16.5 / XNU 8796.121.2.
-- Workflow Actions saat ini belum mengompilasi XNU; workflow hanya memeriksa konfigurasi/DTS dan mengompilasi UEFI scaffold.
+- Profil branch kini memilih iOS 16.5 / XNU 8796.121.2 dan membawa seri kompatibilitas OS untuk source XNU tersebut.
+- GitHub Actions kini menjalankan `unixnu build kernel --skip-prelink` dan menyimpan kandidat kernel native sebagai artifact; hasil CI belum terverifikasi di perangkat.
+- Seri patch UMS512 mencakup patch physmap yang asalnya ditulis untuk XNU 10063; penerapan ke XNU 8796 masih harus dibuktikan oleh CI.
 - Scaffold C21Y belum memuat GOP, eMMC block I/O, atau aplikasi/loader XNU; UART/framebuffer debug yang diwarisi juga masih memiliki asumsi panel board A2.
 - Rekonsiliasi FDT live yang sudah ditangkap dengan ownership firmware dan kontrak handoff C21Y.
 - FD/firmware load address, payload window, stack/heap dan ownership setiap carve-out.
