@@ -20,7 +20,7 @@ jobs:
   linux-build-check:
     name: Linux - C21Y XNU 8796 build and DTS
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 180
 
     steps:
       - name: Checkout C21Y device repository
@@ -210,7 +210,16 @@ jobs:
 
           ls -lh build/
 
+      - name: Build Linux XNU toolchain
+        run: |
+          set -eux
+          sudo python3 "$UNIXNU_DIR/scripts/linux/setup-toolchain.py" /opt/unixnu-linux -j 2
+          test -x /opt/unixnu-linux/bin/lzfse
+          test -x /opt/unixnu-linux/CommandLineTools/usr/bin/ld
+
       - name: Build native XNU kernel
+        env:
+          UNIXNU_TOOLCHAIN: /opt/unixnu-linux
         run: |
           set -eux
           cd "$UNIXNU_DIR"
