@@ -156,21 +156,72 @@ reported two populated zones (4 KiB pages):
 | DMA | 524288 | 524288 | `0x80000000` | 2 GiB | 524272 |
 | Normal | 1048576 | 524287 | `0x100000000` | almost 2 GiB | 524287 |
 
-This is strong runtime evidence that Android manages two DRAM ranges:
-approximately 2 GiB at `0x80000000` and almost 2 GiB at
-`0x100000000`. Together they cover approximately 4 GiB of physical
-address space, subject to holes and reservations.
+This is runtime evidence for two populated Linux zones, not proof of two
+separate physical DRAM banks. The live FDT captured below describes one large
+range and is consistent with a Linux zone boundary at 4 GiB.
 
 Previously collected `MemTotal` was 3,875,088 kB. This is usable-memory
 accounting after kernel and firmware reservations, not a firmware memory map.
 
-The mechanism by which the second bank is supplied is still unverified.
-The raw base DTB and overlay do not explain it. A bootloader-side live-FDT
-fixup is plausible but not proven. Reading `/sys/firmware/fdt` and
-`/proc/device-tree` from Android was blocked by permissions/SELinux in the
-recorded session.
+## 7. Live FDT from the running stock device
 
-## 7. UniXNU firmware memory-map constraints
+On 2026-11-23, the FDT exposed by the running Android kernel at
+`/sys/firmware/fdt` was captured through ADB using a read-only root command.
+The blob parses as FDT v17, totalsize 283729 bytes, SHA-256
+`085ef7c0f9d2b7072466868ef1cd6456e1fcc77e23f058fea13449ccdbd62c83`.
+The connected device reported model `RMX3261`, hardware ID `S19610AA1`,
+Android 11, and Linux `4.14.193`.
+
+The live tree's `/memory/reg` is:
+
+```
+base = 0x80000000
+size = 0xfffff000
+end  = 0x17fffff000 (exclusive)
+```
+
+This is one described range of 4 GiB minus 4 KiB, starting at 2 GiB and
+ending just below 6 GiB. The raw base DTB described only
+`0x80000000 + 0x80000000`. The live FDT therefore directly proves that the
+tree used by the running Android kernel contains a larger memory description.
+Together with the previously audited base DTB and overlay, this is strong
+evidence of a live boot-chain FDT/memory fixup. It does not identify which
+boot-chain component performed it.
+
+The captured live `/reserved-memory` tree reports:
+
+| Region | Address | Size |
+|---|---:|---:|
+| DDRBIST | `0x80000000` | `0x1000` |
+| Debug memory | `0x844c0000` | `0x4000` |
+| Reboot escrow | `0x81ff0000` | `0x10000` |
+| Audio | `0x87500000` | `0x300000` |
+| SIPC | `0x87800000` | `0x800000` |
+| SP DDR | `0x88000000` | `0x300000` |
+| Audio DSP | `0x89000000` | `0x600000` |
+| CP | `0x89600000` | `0x4900000` |
+| SML | `0x94000000` | `0x40000` |
+| TOS | `0x94060000` | `0x4fa0000` |
+| Logo buffer | `0x9e000000` | `0x9e4000` |
+| Face ID | `0xefaae000` | `0x500000` |
+| Framebuffer | `0xfd708000` | `0x1e5a000` |
+| Writeback | `0xff562000` | `0xa1e000` |
+| Ramoops | `0xfff80000` | `0x40000` |
+| Debug memory | `0x100000000` | `0x1000` |
+
+The live tree does not contain the base-DTB `iq-mem@90000000` node, and the
+TOS `reg` differs from the base tree. Do not infer that omitted ranges are
+available to UEFI; reconcile the live tree with firmware ownership and the
+actual handoff before building descriptors.
+
+The live FDT change proves the effective tree differs from the raw base DTB.
+It does not prove that FDL2 performs the fixup: FDL2 contains strings such as
+`fdt_fixup_ddr_size` and `get real ram size`, but no disassembly/call graph
+has established that those routines run in the phone's normal boot path.
+
+
+
+## 8. UniXNU firmware memory-map constraints
 
 The existing EDK2 memory map under
 `uefi/Platforms/Unisoc/bbkA2Pkg/Library/MemoryMapLib/MemoryMapLib.c`
@@ -182,7 +233,7 @@ The C21Y branch still lacks a hardware-qualified C21Y EDK2 package and
 MemoryMapLib. The currently selected C21Y memory-map implementation is
 intentionally fail-closed/empty rather than advertising unverified RAM.
 
-## 8. Current conclusions and next gates
+## 9. Current conclusions and next gates
 
 Confirmed from the raw base DTB:
 - UMS512 SoC identity.
@@ -194,12 +245,12 @@ Confirmed from the raw base DTB:
 
 Confirmed from separate sources:
 - Board overlay identity matches `S19610AA1`.
-- Android runtime sees two populated DRAM zones spanning approximately 4 GiB.
+- Android runtime reports two Linux zones, while the captured live FDT describes one large range spanning nearly 4 GiB.
 - Overlay reserves logo, face-ID, framebuffer and writeback regions.
 
 Still unresolved:
-1. Final live FDT after bootloader fixups and overlays.
-2. Exact DRAM banks and usable/reserved UEFI memory descriptors.
+1. Which boot-chain stage performs the memory-size/FDT fixup.
+2. Usable/reserved UEFI descriptors, including firmware-owned ranges and relocation windows.
 3. Firmware FD, BootShim, stack, heap, initrd and XNUP payload addresses.
 4. GOP framebuffer base, format, stride and ownership at UEFI handoff.
 5. C21Y UEFI package and actual XNU loader compatibility.
