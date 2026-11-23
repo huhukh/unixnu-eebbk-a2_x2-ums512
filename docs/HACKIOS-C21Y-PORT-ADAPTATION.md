@@ -120,6 +120,8 @@ The branch currently has a material target mismatch:
 - `patches/xnu/series` includes `xnu-10063.141.1-security-init.patch` and `xnu-10063.141.1-sparse-index.patch`, alongside a C21Y SDHCI personality patch. Those 10063 patches are not evidence of compatibility with XNU 8796.121.2.
 - `components/SdhciBlock.toml` advertises the iPadOS 17.7.11 ABI.
 - `.github/workflows/build.yml` resolves the UniXNU configuration, compiles the DTS and builds an EDK2 C21Y scaffold. It does not compile the requested XNU kernel.
+- Context-level checks against Apple’s `xnu-8796.121.2` source show that the device `security-init` (2 hunks) and `sparse-index` (5 hunks) patches match their old-context lines. This is not a complete patch application/build check.
+- The upstream UniXNU ARM64 `native-aes-personality.patch` does not match XNU 8796’s `iokit/KernelConfigTables.cpp`: its hunk expects an `IOExclaveProxy` entry that is absent from that source. XNU 8796’s table ends with the `IOPanicPlatform` personality. The current ARM64 series therefore needs a 8796-specific rebase; do not assume a partial hunk match proves the series works.
 
 Therefore the current successful Actions run is not a HackiOS/XNU 8796.121.2 kernel build and the existing profile must not be used to produce a C21Y XNU payload.
 
