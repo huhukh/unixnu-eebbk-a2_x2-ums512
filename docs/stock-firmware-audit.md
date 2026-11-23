@@ -259,7 +259,38 @@ description; no firmware was executed or modified during this analysis.
 
 
 
-## 8. UniXNU firmware memory-map constraints
+## 8. C21Y EDK2 platform integration audit
+
+The local C21Y DSC/FDF and shared UMS512 package were inspected read-only:
+- `c21y.dsc` sets `PcdSystemMemoryBase=0x80000000`, matching the live
+  FDT range start, but still hard-codes `PcdCPUCoresStackBase=0x80480000`
+  with a `0x40000` primary stack. That stack address is unverified.
+- `build-c21y.sh` requires `C21Y_FD_BASE` from a measured cboot address.
+  The FDF's size defaults are build conveniences, not measured placement.
+- The C21Y DSC/FDF include SEC, RamManagerDxe, DtPlatformDxe and reset support.
+  They do not include the shared GOP, SDHCI/eMMC DXE driver, UniXNU application,
+  or DarwinBoot/XNU loader. A compiled FV would not yet launch XNU or provide
+  these devices.
+- The shared UMS512 DSC include sets GICv3 PCDs to `0x12000000` and
+  `0x12040000`, timer interrupts to 13/14/11/10, and selects
+  `SprdDebugSerialPortLib`. These match static stock-tree data where noted,
+  but GIC, PSCI CPU-on, timer events, and UART handoff have not been validated
+  by this EDK2 build on C21Y. The C21Y FDT's `enable-method = "psci"` is not
+  proof that a new firmware's PSCI calls work.
+- The serial library does not reprogram the UART clock/baud and also contains
+  a debug framebuffer path hard-coded for 1200x1920 at `0x9e000000`.
+  C21Y's panel is 720x1600 and the live FDT separately reserves its framebuffer
+  at `0xfd708000`. The inherited framebuffer path is not a qualified C21Y
+  console; its writes must not be treated as visible logging.
+- The shared GOP driver is for the 1200x1920 HIMAX8279/BOE tablet panel and is
+  not included in the C21Y FV. C21Y needs its own panel geometry, buffer,
+  stride, and pixel-format validation before GOP can be added.
+
+This audit is a static configuration review only; no EDK2 image was booted.
+Until FD/stack placement and the C21Y display/storage/XNU handoff are proven,
+the C21Y FV remains a compile scaffold.
+
+## 9. UniXNU firmware memory-map constraints
 
 The existing EDK2 memory map under
 `uefi/Platforms/Unisoc/bbkA2Pkg/Library/MemoryMapLib/MemoryMapLib.c`
@@ -271,7 +302,7 @@ The C21Y branch still lacks a hardware-qualified C21Y EDK2 package and
 MemoryMapLib. The currently selected C21Y memory-map implementation is
 intentionally fail-closed/empty rather than advertising unverified RAM.
 
-## 9. Current conclusions and next gates
+## 10. Current conclusions and next gates
 
 Confirmed from the raw base DTB:
 - UMS512 SoC identity.
