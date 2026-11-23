@@ -1,9 +1,8 @@
-warning: in the working copy of 'osfmk/arm64/arm_vm_init.c', LF will be replaced by CRLF the next time Git touches it
 diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
 index 985370e..d78c5aa 100644
 --- a/osfmk/arm64/arm_vm_init.c
 +++ b/osfmk/arm64/arm_vm_init.c
-@@ -1817,6 +1817,18 @@ init_ptpages(tt_entry_t *tt, vm_map_address_t start, vm_map_address_t end, bool
+@@ -1812,6 +1812,18 @@
  #define ARM64_PHYSMAP_SLIDE_RANGE (1ULL << 30) // 1 GB
  #define ARM64_PHYSMAP_SLIDE_MASK  (ARM64_PHYSMAP_SLIDE_RANGE - 1)
  
@@ -22,16 +21,14 @@ index 985370e..d78c5aa 100644
  void
  arm_vm_init(uint64_t memory_size, boot_args * args)
  {
-@@ -1866,7 +1878,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
- #endif
- 
+@@ -1861,6 +1873,6 @@
  #if defined(ARM_LARGE_MEMORY)
 -	unsigned long physmap_l1_entries = ((real_phys_size + ARM64_PHYSMAP_SLIDE_RANGE) >> ARM_TT_L1_SHIFT) + 1;
 +	unsigned long physmap_l1_entries = ((real_phys_size + ARM64_PHYSMAP_SLIDE_RANGE + ARM64_PHYSMAP_ALIGNMENT_PADDING) >> ARM_TT_L1_SHIFT) + 1;
  	physmap_base = VM_MIN_KERNEL_ADDRESS - (physmap_l1_entries << ARM_TT_L1_SHIFT);
  #else
  	physmap_base = phystokv(args->topOfKernelData);
-@@ -1890,7 +1902,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+@@ -1883,7 +1895,7 @@
  #if defined(ARM_LARGE_MEMORY)
  	/* For large memory systems with no PPL such as virtual machines */
  	static_memory_end = phystokv(args->topOfKernelData);
