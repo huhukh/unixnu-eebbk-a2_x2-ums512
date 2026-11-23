@@ -43,6 +43,21 @@ Do not infer a UEFI memory map from the live `/memory/reg` alone. Firmware,
 secure-world, modem/DSP, bootloader, and relocation ownership still need to be
 reconciled with the exact UEFI handoff.
 
+## Platform integration audit
+
+The C21Y DSC/FDF are still a compile scaffold:
+- `PcdCPUCoresStackBase=0x80480000` and size `0x40000` remain unverified.
+- `C21Y_FD_BASE` is required from measurement; no safe value is established.
+- The FDF does not include GOP, SDHCI/eMMC DXE, UniXNU.efi, or DarwinBoot.
+- Shared UMS512 PCDs provide GICv3 and timer settings; their runtime operation
+  and PSCI CPU-on behavior are not qualified on C21Y.
+- `SprdDebugSerialPortLib` assumes inherited UART setup and contains an
+  A2-specific 1200x1920 framebuffer path at `0x9e000000`; C21Y's live tree
+  instead lists the panel framebuffer at `0xfd708000`. This is not a
+  validated C21Y display/log path.
+- The shared GOP driver targets the A2/X2 1200x1920 panel and is absent from
+  the C21Y FV. The C21Y panel is 720x1600 and needs its own measured GOP data.
+
 ## Validation completed
 The latest previously recorded EDK2 CI run compiled the firmware-volume scaffold and structurally validated the generated FV. That run predates this memory-map correction; a new CI run must pass before this revision is considered build-checked.
 
