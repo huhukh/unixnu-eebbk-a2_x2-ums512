@@ -237,6 +237,8 @@ jobs:
           path: |
             build/
             out/**/kernel/kernel.macho
+            out/**/logs/**
+            out/**/tree/build/xnu/**/log/**
             status.json
           if-no-files-found: warn
           retention-days: 7
