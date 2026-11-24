@@ -1,0 +1,18 @@
+diff --git a/osfmk/arm64/cpu.c b/osfmk/arm64/cpu.c
+index 94e91306b14364f720ea80e46d853035aabd78e6..9a43e5884664582afdb2a5f5103a0d0d18e87a24 100644
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -100,5 +100,13 @@
+ #else
+ extern void __attribute__((noreturn)) arm64_prepare_for_sleep(boolean_t deep_sleep);
+ #endif
+ extern void arm64_force_wfi_clock_gate(void);
++
++/*
++ * Non-Apple platform sleep hook. ArmCpu installs it when boot-arg
++ * platform-sleep=1, and a static kernel link requires every weak_import
++ * to resolve. ml_arm_sleep in xnu-8796 has no call site for it, so sleep
++ * stays disabled unless a board adds the call and its wake path.
++ */
++void (*arm64_platform_sleep_hook)(boolean_t boot_cpu) = NULL;
+ #if defined(APPLETYPHOON)

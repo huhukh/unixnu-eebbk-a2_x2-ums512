@@ -6,4 +6,10 @@
 # it rejects two 8796 headers during installhdrs. Blob hashes match the pinned
 # XNU source exactly. See docs/RESEARCH_LOG.md R9-R11.
 8796-unifdef-headers.patch
+# 8796-arm64-platform-sleep-hook defines the board sleep hook symbol that
+# ArmCpu declares weak_import. A static kernel link does not resolve an
+# undefined weak_import (Build #126; docs/RESEARCH_LOG.md R13). No call site
+# is added on 8796 because arm_init_cpu() does not exist there, so sleep
+# stays disabled until a board supplies a verified 8796 wake path.
+8796-arm64-platform-sleep-hook.patch
 sdhci-block-personality.patch
