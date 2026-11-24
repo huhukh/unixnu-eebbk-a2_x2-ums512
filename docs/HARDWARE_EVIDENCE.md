@@ -107,6 +107,20 @@ The memory **layout** is now proven. `C21Y MemoryMapLib` still stays fail-closed
 
 These are the header fields baked into the stock boot image. The live boot loaded the ramdisk at `0x82100000` (`chosen/linux,initrd-start`), which does **not** equal `0x80000000 + ramdisk_addr`, so the bootloader's relocation/base convention is **not yet proven**. Do not use these as a BootShim handoff address without further evidence.
 
+### Boot handoff evidence (standard arm64 Linux protocol; not yet verified with XNU)
+
+| Item | Evidence |
+| --- | --- |
+| DRAM base | `0x80000000` (live FDT `/memory/reg`) |
+| Decompressed kernel | `/proc/iomem` `Kernel code 80080000-8100ffff`, `Kernel data 812c0000-81802fff`; consistent with `0x80000000 + TEXT_OFFSET 0x80000` |
+| Compressed kernel load | `0x80000000 + kernel_addr(0x8000) = 0x80008000` (header-derived, not directly observed) |
+| Initrd | `0x82100000-0x82a03d10` (`chosen/linux,initrd-start/end`) |
+| KASLR | no `chosen/kaslr-seed` present |
+| `chosen/bootargs_ext` | `androidboot.hardware=S19610AA1 androidboot.dtbo_idx=0` |
+| FDT handoff register | standard arm64 Linux: `x0` = FDT pointer (not directly observed) |
+
+This is consistent with the standard arm64 Linux boot protocol, but a BootShim/XNU handoff at `0x80080000` (runtime) / `0x80008000` (load) with `x0`=FDT is **not yet tested** on this device. Treat it as the leading hypothesis, not a verified handoff.
+
 ## 5. Firmware / EDK2
 
 - The EDK2 job in Build #124 and Build #126 succeeded and produced `realme-c21y-uefi-scaffold.fd`.
