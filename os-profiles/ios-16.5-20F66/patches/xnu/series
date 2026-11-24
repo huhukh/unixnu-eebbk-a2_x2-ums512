@@ -9,7 +9,7 @@ arch:../../../patches/xnu/disabled-deferred-reclaim.patch
 arch:../../../patches/xnu/kernel-sdk-root.patch
 arch:../../../patches/xnu/local-availability.patch
 arch:../../../patches/xnu/mockfs-intermediate-lookup.patch
-arch:../../../patches/xnu/mockfs-memory-devvice-width.patch
+arch:../../../patches/xnu/mockfs-memory-device-width.patch
 arch:../../../patches/xnu/mockfs-statfs.patch
 arch:../../../patches/xnu/mockfs-test-file.patch
 arch:../../../patches/xnu/mockfs-typed-allocation.patch
@@ -33,26 +33,45 @@ arch:../../../patches/xnu/non-apple-cache-monitor.patch
 arch:../../../patches/xnu/non-apple-iommu-bootstrap.patch
 arch:../../../patches/xnu/non-apple-pmap-field.patch
 arch:../../../patches/xnu/null-root-media.patch
-arch:../../../patches/xnu/pmap-replace-pvh-with-pvhead.patch
-arch:../../../patches/xnu/preemptible-rtspinlock.patch
-arch:../../../patches/xnu/remove-apple-cpu-subtype-check.patch
-arch:../../../patches/xnu/remove-apple-firmware-dependency.patch
-arch:../../../patches/xnu/remove-apple-soc-check.patch
-arch:../../../patches/xnu/remove-apple-timer-check.patch
-arch:../../../patches/xnu/remove-apple-wdt-check.patch
-arch:../../../patches/xnu/remove-legacy-mach-exception-abi.patch
-arch:../../../patches/xnu/remove-platform-expert-dependency.patch
-arch:../../../patches/xnu/symbol-crashreporter.patch
-../xnu-8796/xnuprelink-arch-support.patch
-../xnu-8796/xnuprelink-component-skeleton.patch
-../xnu-8796/xnuprelink-darwinboot-entry.patch
-../xnu-8796/xnuprelink-elf-dependencies.patch
-../xnu-8796/xnuprelink-export-symbols.patch
-../xnu-8796/xnuprelink-kernel-cache.patch
-../xnu-8796/xnuprelink-kernelcaches-dylib.patch
-../xnu-8796/xnuprelink-macho-loader.patch
-../xnu-8796/xnuprelink-macho-section-align.patch
-../xnu-8796/xnuprelink-page-size.patch
-../xnu-8796/xnuprelink-pecoff-loader.patch
-../xnu-8796/xnuprelink-relocation.patch
-../xnu-8796/xnuprelink-symbol-resolution.patch
+arch:../../../patches/xnu/offline-component-load-probes.patch
+arch:../../../patches/xnu/offline-legacy-start.patch
+arch:../../../patches/xnu/offline-native-gpu-broker.patch
+arch:../../../patches/xnu/offline-owner-boot-manifest.patch
+arch:../../../patches/xnu/offline-owner-cache-carrier.patch
+arch:../../../patches/xnu/offline-owner-root-binding-audit.patch
+arch:../../../patches/xnu/offline-owner-root-crypto-probe.patch
+# offline-owner-systemos-mount: iPadOS 17 owner/addon/cryptex feature, not ported yet
+arch:../../../patches/xnu/offline-owner-z-air-init.patch
+arch:../../../patches/xnu/offline-pgz-alignment-probe.patch
+# pgz-aligned-validation: not applicable (zone_id_require_aligned does not exist in xnu-8796)
+# public-entitlements-header: not applicable (necp_client.c in xnu-8796 neither includes the replaced header nor uses the web-browser entitlements)
+# published-freezer-condition: not applicable (the malformed #if it fixes is not in xnu-8796)
+arch:../../../patches/xnu/source-corecrypto14-bootstrap.patch
+../xnu-8796/source-machine-layer.patch
+arch:../../../patches/xnu/source-pthread-bootstrap.patch
+arch:../../../patches/xnu/zzw-native-adreno-sandbox-grant.patch
+arch:../../../patches/xnu/zzwb-native-sandbox-grant-set-properties.patch
+../xnu-8796/zzx-pmap-sync-64bit-pa.patch
+# zzy-native-gpu-addon-mount: iPadOS 17 owner/addon/cryptex feature, not ported yet
+# zzy-staged-system-apps: iPadOS 17 owner/addon/cryptex feature, not ported yet
+# zzyb-native-cryptex-os-view: iPadOS 17 owner/addon/cryptex feature, not ported yet
+arch:../../../patches/xnu/zzyc-owner-skip-launch-constraints.patch
+
+# Newer clang (UniXNU's toolchain) removed the flag that acknowledged -ftrivial-auto-var-init=zero; xnu-8796 still passes it.
+../xnu-8796/clang-drop-auto-var-init-acknowledgement.patch
+# Newer clang rejects arrays of the over-aligned uio_stackbuf_t; backport later xnu's UIO_STACKBUF().
+../xnu-8796/clang-uio-stackbuf.patch
+# The toolchain's iig generates DriverKit glue that reads IORPC.kernelContent (later xnu); backport the field.
+../xnu-8796/iorpc-kernel-content.patch
+# Current clang rejects __typeof__(*(void *)) in C++; backport xnu-10063's os_get_pointee_type() for kalloc type checks.
+../xnu-8796/kalloc-pointee-type.patch
+# The xnu-8796 source release omits osfmk/arm64/kpc.c; xnu-10063's file, whose non-Apple branch stubs the PMU backend.
+../xnu-8796/arm64-kpc-from-xnu-10063.patch
+# UniXNU's archive builders read per-object compile records (clang -MJ), which xnu-10063's MakeInc.rule writes.
+../xnu-8796/compile-records.patch
+# UniXNU's libpthread (519.120.4) calls proc_get_jit_entitled; backport that pthread callback from xnu-10063.
+../xnu-8796/pthread-jit-entitled-callback.patch
+
+# XnuPrelink: the early security hook and sparse kext index (apply to xnu-8796 unchanged).
+component:XnuPrelink/patches/xnu-10063.141.1-security-init.patch
+component:XnuPrelink/patches/xnu-10063.141.1-sparse-index.patch
