@@ -8,10 +8,10 @@ _Last updated: 2026-11-24 (continuation session). All statements below are evide
 | --- | --- |
 | Repository | `https://github.com/huhukh/unixnu-eebbk-a2_x2-ums512` |
 | Branch | `port/realme-c21y-rmx3261` |
-| Branch HEAD | `8d914b2f3dd35cefd09e123b67ea7a41e51864b4` (`ci: retain full XNU bootstrap logs on failure`) |
-| PR | #1, base `main` at `7149f64a91cbfc8ef3cbe84c75d42c8f5050f7f2` |
-| Latest workflow run | Build #124, `https://github.com/huhukh/unixnu-eebbk-a2_x2-ums512/actions/runs/45357899006`, `failure` |
-| Failing job | `138320222000`, `Linux - C21Y XNU 8796 build and DTS`, step 17 `Build native XNU kernel` |
+| Branch HEAD | `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge of PR #2) |
+| PR | #2, `tmp/c21y-unifdef-fix` -> `port/realme-c21y-rmx3261`, merged |
+| Latest workflow run | Build #126, `https://github.com/huhukh/unixnu-eebbk-a2_x2-ums512/actions/runs/45385291507`, in progress (EDK2 success) |
+| Previous failure | Build #124, step 17 `Build native XNU kernel`, `Parse failure` (unifdef 2.10) |
 | Local snapshot | `C:\Users\Randika Aryasatya\Documents\Default Project\unixnu-eebbk-a2_x2-ums512-8d914b2f3dd35cefd09e123b67ea7a41e51864b4` |
 | XNU source | `apple-oss-distributions/xnu` tag `xnu-8796.121.2` → commit `c54f35ca767986246321eb901baf8f5ff7923f6a`, equal to the OS-profile pin |
 | UniXNU core | `main` snapshot at `8542980d02b4d2cc5c32ee3542de1760b2562aac` (latest before Build #124 completed) |
@@ -34,13 +34,14 @@ The failing message is emitted by XNU's own installhdrs rule, not by the C21Y so
 
 `MACHINE_CONFIGS=BCM2837` is **not** the root cause. It is passed by UniXNU `scripts/build-xnu-4k-baseline.sh:147-148` to every Linux baseline build and is unrelated to the unifdef parser exit.
 
-## 3. Fix applied locally (not yet pushed)
+## 3. Fix merged and pushed
 
 | File | Change |
 | --- | --- |
 | `patches/xnu/8796-unifdef-headers.patch` | New patch. Adds a message to bare `#error`; collapses two multi-line `#endif` comments to single lines. |
 | `patches/xnu/series` | Adds the patch before `sdhci-block-personality.patch`, with the evidence note. |
-| `PROJECT_STATE.md`, `docs/RESEARCH_LOG.md`, `docs/BUILD_HISTORY.md`, `docs/HARDWARE_EVIDENCE.md`, `docs/NEXT_SESSION.md` | New checkpoint records. |
+| `PROJECT_STATE.md`, `docs/RESEARCH_LOG.md`, `docs/BUILD_HISTORY.md`, `docs/HARDWARE_EVIDENCE.md`, `docs/NEXT_SESSION.md` | Checkpoint records. |
+| Merge | PR #2 merged to `port/realme-c21y-rmx3261` at `100a64ccee1d153b2baa7432a47a2b5877f09ed6`. |
 
 Why this fix: it is the smallest change that removes the exact constructs unifdef 2.10 misparses, it matches a proven upstream device-port fix, and its blob hashes prove it applies to the exact pinned XNU source. No guessed address, register, memory map, config value or toolchain assumption is introduced.
 
@@ -58,16 +59,17 @@ Local verification performed:
 | --- | --- |
 | Host reproduction of the parser failure | **Done** |
 | Minimal source fix identified and locally verified | **Done** |
-| Fix committed and pushed to GitHub | **Not done** — no `git`, `gh`, or token in the current environment |
-| GitHub Actions XNU kernel compile success | **Not yet** — requires push and a new run |
+| Fix committed and pushed to GitHub | **Done** — PR #2 merged at `100a64ccee1d153b2baa7432a47a2b5877f09ed6` |
+| GitHub Actions XNU kernel compile success | **Pending** — Build #126 in progress |
 | Non-empty `kernel.macho` artifact verified | **Not yet** |
+| Live hardware evidence over ADB (read-only) | **Done** — memory map, GIC, PSCI, CPU, storage; see `docs/HARDWARE_EVIDENCE.md` |
 | Boot success on Realme C21Y | **Not claimed** |
 | Full hardware support | **Not claimed**; only the evidence in `docs/HARDWARE_EVIDENCE.md` is established |
 | Device writes / flashing / reboot | **None** in this session |
 
 ## 5. Immediate next action
 
-Push the local changes, then let CI produce Build #125. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish with `conclusion: success` and a non-empty `kernel.macho` artifact whose SHA-256 and Mach-O header are verified. Details and commands are in `docs/NEXT_SESSION.md`.
+Wait for Build #126 (`45385291507`) on `100a64c`. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. The live device memory map is now proven (see `docs/HARDWARE_EVIDENCE.md` §3); the next design step is the boot handoff (FDT pointer, firmware ownership, payload/stack/heap/FD windows), not the memory layout.
 
 ## 6. Checkpoint commands
 
