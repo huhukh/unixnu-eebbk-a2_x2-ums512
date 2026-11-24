@@ -1,11 +1,8 @@
 # iOS 16.5 (xnu-8796.121.2) kernel patches, in application order.
 #
-# The board selects this series instead of arch:patches/xnu/series (written for xnu-10063). It keeps the
-# ARM64 profile's order: patches that apply to xnu-8796 unchanged are referenced from UniXNU (arch:),
-# ports live in ../xnu-8796/, and the XnuPrelink component patches come last.
+# The board selects this series instead of arch:patches/xnu/series (written for xnu-10063). It keeps the ARM64 profile's order: patches that apply to xnu-8796 unchanged are referenced from UniXNU (arch:), ports live in ../xnu-8796/, and the XnuPrelink component patches come last.
 
 ../xnu-8796/apple-only-cpu-tunables.patch
-arch:../../../patches/xnu/architectural-timer-entry.patch
 arch:../../../patches/xnu/armvirt-platform-personality.patch
 arch:../../../patches/xnu/cxx-flag-dependencies.patch
 arch:../../../patches/xnu/disabled-deferred-reclaim.patch
