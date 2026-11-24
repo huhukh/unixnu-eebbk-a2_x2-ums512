@@ -2,7 +2,7 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 index a261552b8cdd..f435c87d6ac7 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -33,7 +33,9 @@
+@@ -17,7 +17,9 @@
  #include <mach_assert.h>
  #include <machine/asm.h>
  #include "assym.s"
@@ -12,11 +12,9 @@ index a261552b8cdd..f435c87d6ac7 100644
  #include <arm64/exception_asm.h>
  
  #if __ARM_KERNEL_PROTECT__
-@@ -784,10 +786,13 @@ common_start:
- 	// Initialization common to all non-virtual Apple targets
+@@ -774,10 +776,13 @@ common_start:
  #endif  // APPLE_ARM64_ARCH_FAMILY
  
-+
 +#if defined(APPLE_ARM64_ARCH_FAMILY)
  	// Read MIDR before start of per-SoC tunables
  	mrs x12, MIDR_EL1
