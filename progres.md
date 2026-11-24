@@ -55,3 +55,4 @@
 - 2026-11-24: XNU step 13-15 sukses (patch/config/DTS), masuk step 16 (toolchain).
 - 2026-11-24: commit `progres.md` (d1ef1f4) memicu Build #127 -> dibatalkan.
 - 2026-11-24: ADB read-only ke HP (root Magisk) -> ambil memory map, GIC, PSCI, CPU, partisi, FDT.
+- 2026-11-24: boot handoff evidence: kernel runtime `0x80080000`, compressed load `0x80008000` (header), initrd `0x82100000`, no KASLR seed; protokol arm64 `x0`=FDT (belum diuji dgn XNU).
