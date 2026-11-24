@@ -29,6 +29,7 @@
 - Timer: `arm,armv8-timer`. Console: `ttyS1` @ `0x70100000` (stdout-path `/soc/ap-apb/serial@70100000`).
 - Boot storage: eMMC `mmcblk0` (~58.2 GiB) via `71400000.sdio`. A/B slot, aktif `_a`.
 - Partisi penting: boot_a=p40(64M), vendor_boot_a=p42(100M), dtb_a=p44(8M), dtbo_a=p46(8M), super=p48(~8.6G), vbmeta_a=p54, uboot_a=p8, trustos_a=p4, sml_a=p6.
+- Boot image `boot_a` header v2: kernel_size 0x1496010, ramdisk_size 0x903d10 (sama dgn initrd live), kernel_addr 0x8000, ramdisk_addr 0x5400000, tags_addr 0x100, page_size 0x800. **Base/relokasi bootloader BELUM terbukti** (initrd live 0x82100000 != 0x80000000+0x5400000) — jangan dipakai sebagai handoff address dulu.
 
 ## Yang Sudah Selesai
 
