@@ -1,4 +1,9 @@
 # C21Y device-specific XNU patches, applied after SoC and iOS 16.5 patches.
 # The iOS 16.5 OS series already includes the XnuPrelink security-init and sparse-index
-# patches. Keep only the C21Y eMMC personality here.
+# patches.
+#
+# 8796-unifdef-headers is required on Linux hosts whose apt unifdef is 2.10:
+# it rejects two 8796 headers during installhdrs. Blob hashes match the pinned
+# XNU source exactly. See docs/RESEARCH_LOG.md R9-R11.
+8796-unifdef-headers.patch
 sdhci-block-personality.patch
