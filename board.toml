@@ -24,6 +24,13 @@ include = [
 [kernel]
 defconfig = "realme-c21y-rmx3261_defconfig"
 
+# CI currently stages the native XNU executable without adding kernelcache kexts.
+# This path is the exact output of scripts/build-xnu-4k-baseline.sh.
+# Full prelink remains disabled until a C21Y-matched IPSW kernelcache and
+# its hash/closure have been verified.
+[kernel.prelink]
+kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped"
+
 config_fragments = [
   "arch:configs/common.config",
   "soc:configs/ums512.config",
