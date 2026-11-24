@@ -91,6 +91,22 @@ The memory **layout** is now proven. `C21Y MemoryMapLib` still stays fail-closed
 - Rootfs: `root=/dev/ram0 rw` (ramdisk); A/B slots active, `slot_suffix=_a`, `force_normal_boot=1`.
 - Key partitions from `/dev/block/by-name`: `boot_a=mmcblk0p40` (64 MiB), `vendor_boot_a=p42` (100 MiB), `dtb_a=p44` (8 MiB), `dtbo_a=p46` (8 MiB), `super=p48` (~8.6 GiB), `vbmeta_a=p54`, `uboot_a=p8`, `trustos_a=p4`, `sml_a=p6`, `misc=p3`, `persist=p23`, `metadata=p56`, `userdata=p75`.
 
+### Boot image header (`boot_a`, raw read-only dump, base/interpretation unproven)
+
+| Field | Raw value |
+| --- | --- |
+| magic | `ANDROID!` |
+| header_version | `2` |
+| kernel_size | `0x1496010` (~20.6 MiB) |
+| ramdisk_size | `0x903d10` (~9.0 MiB) — equals live initrd size (`0x82a03d10 - 0x82100000`) |
+| kernel_addr | `0x8000` |
+| ramdisk_addr | `0x5400000` |
+| tags_addr | `0x100` |
+| page_size | `0x800` |
+| boot-image cmdline | `console=ttyS1,115200n8 video=HDMI-A-1:1280x800@60 buildvariant=user` |
+
+These are the header fields baked into the stock boot image. The live boot loaded the ramdisk at `0x82100000` (`chosen/linux,initrd-start`), which does **not** equal `0x80000000 + ramdisk_addr`, so the bootloader's relocation/base convention is **not yet proven**. Do not use these as a BootShim handoff address without further evidence.
+
 ## 5. Firmware / EDK2
 
 - The EDK2 job in Build #124 and Build #126 succeeded and produced `realme-c21y-uefi-scaffold.fd`.
