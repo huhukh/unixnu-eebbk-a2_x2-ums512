@@ -443,3 +443,10 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 - Extended `8796-non-apple-iommu-bootstrap.patch` in place: added `@@ -5815,6 +5815,8 @@` (static forward declaration before `pmap_enter_options_internal`), `@@ -11620,9 +11620,10 @@` and `@@ -11630,9 +11630,10 @@` (non-monitor branches become a comment plus `#pragma unused(kva, size, ppl_writable)`). Now 1,992 bytes, LF, ends `0x0a`; all five hunks replayed byte-for-byte against the pinned `pmap.c`.
 - Kept the `#if XNU_MONITOR` branches intact; no PPL behaviour was invented for Apple hardware.
 - No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
+
+## R26 — macOS payload run #5 cancelled before starting
+
+**Evidence (run `45592510281`, head `1c7be0e9`)**
+- Workflow run `failure`, job `139130078007` `cancelled`: created/started `10:11:06Z`, completed `10:26:07Z`, `steps: []`, `runner_id: 0`, `runner_name: ""`, no artifacts. The head SHA contains the R25 patch (patch commit `f7c2f5f8` is an ancestor).
+- `macos.yml` has no `concurrency` group and `timeout-minutes: 360`; the 15-minute gap is not a workflow limit. No compiler ran and no log exists, so this is a runner/cancellation event, not a source failure.
+- No code change is justified: re-dispatch the same head with `macos-26`, Xcode `26.6`, `kernel payload`, `upload_images=true`, `skip_bindings_check=true`, `unique_chip_id=0x8015`.

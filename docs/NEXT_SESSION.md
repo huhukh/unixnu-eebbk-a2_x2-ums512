@@ -20,7 +20,7 @@ macOS run #1 (`45573253682`) failed on a missing OS profile (R22, fixed);
 runs #2–#4 failed at `Build kernel`: R23 (Xcode's missing `availability.pl`),
 R24 (fakeroot kernel headers off the `-I` path), then R25 (the R21 8796 port
 dropped the `pmap_phys_write_disable` forward declaration and the no-monitor
-no-op branches). All three fixes are validated; run #5 must be dispatched.
+no-op branches). All three fixes are validated. Run #5 was cancelled before starting (no runner, no steps, R26); run #6 must be dispatched on the same head.
 
 ## 1. Current state
 
