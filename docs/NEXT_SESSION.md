@@ -16,8 +16,9 @@ Do not re-investigate the unifdef failure (closed, R9–R12), the
 **Immediate action:** commit the R21 patch and trigger CI without `[skip ci]`.
 Build #143 confirmed R20 fixed and died on xnu-8796's unguarded Apple PPL
 SART/UAT include/calls; R21's fix is in CI as build #144 (`45584005675`).
-macOS payload run #1 (`45573253682`) failed on a missing device OS profile
-(R22); `macos.yml` now installs it and run #2 (`45584727801`) is active.
+macOS run #1 (`45573253682`) failed on a missing OS profile (R22, fixed);
+run #2 (`45584727801`) failed on Xcode's missing `availability.pl` (R23),
+fixed by the OS-series `local-availability.patch`. Run #3 must be dispatched.
 
 ## 1. Current state
 

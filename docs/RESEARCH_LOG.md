@@ -402,3 +402,16 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 - `.github/workflows/macos.yml`: new step `Install iOS 16.5 OS profile` immediately after `Clone UniXNU core`, calling `bash device/scripts/install-os-profile.sh UniXNU` and asserting `UniXNU/profiles/os/ios-16.5-20F66/profile.toml` exists. Mirrors the Linux workflow exactly; no new files, no guessed paths.
 - Note for the next gate: step `Apply BBK A2 bring-up kernel patches` uses `scripts/patch-bringup-kernel.py`; its `0x9e000000` target is the live-tree `logobuffer@9e000000` reservation (`HARDWARE_EVIDENCE.md` §9), not a guessed address. It still has to be re-verified on an actual xnu-8796 `kernel.macho` — pattern misses must be root-caused, not ignored.
 - No payload/boot claim until the re-dispatched run produces a verified `kernel.macho` and `payload.img`.
+
+## R23 — macOS payload run #2: `availability.pl` not in Xcode 26.6 SDK
+
+**Evidence (run `45584727801`, head `9e3c883d`, job `139103318340`)**
+- R22 fix confirmed: step 10 `defconfig + status` succeeded. Step 11 `Build kernel` failed after 51 s; steps 12–14 skipped, no `kernel.macho`.
+- Artifact `macos-logs` id `15008039045`, 6,387 bytes, digest `sha256:1f221c71dca6cbc65b75d37d547b67dbb92d9ff0c054be9745528d079528c0d6`, downloaded via `nightly.link`. First real error in `logs/kernel-bootstrap.log`: `Unable to locate /Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk//usr/local/libexec/availability.pl (or not executable)`, then `make[5]: *** [_symbol_aliasing.h] Error 1` → `installhdrs` Error 2.
+- Pinned source `c54f35ca7679`, `bsd/sys/make_symbol_aliasing.sh:37` hardcodes `AVAILABILITY_PL="${SDKROOT}/${DRIVERKITROOT}/usr/local/libexec/availability.pl"`. Xcode 26.6's MacOSX26.5 SDK does not ship that helper.
+- UniXNU already solves this: `scripts/build-xnu-4k-baseline.sh:37-45` builds `availability.pl` from the pinned `AvailabilityVersions` feed into `.cache/fakeroot/usr/local/libexec/`, and line 66 exports `XNU_AVAILABILITY_PL`. `patches/xnu/local-availability.patch` makes `make_symbol_aliasing.sh` honour that variable. R18 removed the arch arm64 series (written for xnu-10063), so this generic patch was lost from the OS series.
+
+**Fix**
+- New `os-profiles/ios-16.5-20F66/patches/xnu-8796/local-availability.patch`: `AVAILABILITY_PL="${XNU_AVAILABILITY_PL:-${SDKROOT}/${DRIVERKITROOT}/usr/local/libexec/availability.pl}"`. 503 bytes, LF, ends `0x0a`; hunk `@@ -34,7 +34,7 @@` replayed byte-for-byte against the pinned `make_symbol_aliasing.sh`. Added to the OS series after `8796-non-apple-iommu-bootstrap.patch`.
+- No new files, no workflow change, no guessed tool path: it uses the feed-built helper the UniXNU script already prepares.
+- No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
