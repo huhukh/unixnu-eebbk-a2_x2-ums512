@@ -158,7 +158,8 @@ def main():
         index += 1
     command += ["-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-c99-designator",
                 "-Wno-reorder-init-list", "-Wno-deprecated-enum-enum-conversion",
-                "-Wno-unnecessary-virtual-specifier", "-Wno-deprecated-declarations",
+                "-Wno-unnecessary-virtual-specifier", "-Wno-error=unknown-warning-option",
+                "-Wno-deprecated-declarations",
                 "-I", str(ROOT / ".cache/xnu-work/osfmk"), "-I", str(STORAGE_INCLUDE)]
     (out / "compile-command.json").write_text(json.dumps(command, indent=2) + "\n")
     result = subprocess.run(command, cwd=record["directory"], stdout=subprocess.PIPE,
