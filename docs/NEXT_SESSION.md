@@ -20,7 +20,7 @@ macOS run #1 (`45573253682`) failed on a missing OS profile (R22, fixed);
 runs #2–#4 failed at `Build kernel`: R23 (Xcode's missing `availability.pl`),
 R24 (fakeroot kernel headers off the `-I` path), then R25 (the R21 8796 port
 dropped the `pmap_phys_write_disable` forward declaration and the no-monitor
-no-op branches). All three fixes are validated. Run #5 was cancelled before starting (R26). Run #6 reached the kernel and failed on the missing `ptep_get_iommu` (R27); a sixth hunk was added to the same 8796 patch. Dispatch macOS run #7 and let the patch commit trigger Linux build #146.
+no-op branches). All three fixes are validated. Run #5 was cancelled before starting (R26). Run #6 reached the kernel and failed on the missing `ptep_get_iommu` (R27); a sixth hunk was added to the same 8796 patch. Run #7 was cancelled before starting (R28); run #8 is queued. Linux build #146 is running. Leave the queued macOS job alone until a runner is assigned.
 
 ## 1. Current state
 

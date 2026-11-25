@@ -462,3 +462,7 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 - Added `@@ -4678,5 +4678,5 @@` to `8796-non-apple-iommu-bootstrap.patch`: `ppnum, (void *)pte_p, pve_p);`. The patch is now 2,288 bytes, LF, ends `0x0a`; all six hunks are ascending and replayed byte-for-byte against pinned `pmap.c`.
 - No stub helper, no guessed header, no behaviour change beyond the panic argument.
 - No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
+
+## R28 — macOS run #7 cancelled before starting (repeat of R26)
+
+Run `45599346138`, head `d4869f5b`, job `139153789235`: created `10:54:02Z`, cancelled `11:09:03Z`, `steps: []`, `runner_id: 0`, no artifacts. Same 15-minute no-runner cancellation as run #5 (R26). GitHub status showed all systems operational; `macos.yml` has no concurrency group. No compiler ran, so there is no source error to fix. Re-dispatched as run #8 on the same head. A queued macOS job must be left alone until a runner is assigned; cancelling it only resets the queue.
