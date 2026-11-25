@@ -1,8 +1,8 @@
 name: macOS kernel + payload
 
 # Builds the two Apple-derived layers on a macOS runner:
-#   kernel  : XNU 10063.141.1 from apple-oss-distributions + UniXNU patch series,
-#             prelinked against the iPadOS 17.7.11 (21H461) kernelcache
+#   kernel  : version, OS profile and patch series come from device/board.toml
+#             and the selected defconfig (C21Y: xnu-8796 / iOS 16.5)
 #   payload : FAT volume with kernel.macho + kernel.macho.adt + EFI/UniXNU/unixnu.toml
 #
 # Adapted from UniXNU's own .github/workflows/macos.yml (the only supported way to
@@ -38,7 +38,7 @@ on:
       unique_chip_id:
         description: Platform seed for the ADT (hex)
         required: true
-        default: "0x554d533531325041"
+        default: "0x8015"
       upload_images:
         description: Upload the payload artifact (Apple-derived; normally keep off)
         type: boolean
@@ -134,7 +134,7 @@ jobs:
           set -eux
           test -d "$DEVELOPER_DIR"
           test -f device/board.toml
-          test -f device/configs/bbk-a2_defconfig
+          test -f device/configs/realme-c21y-rmx3261_defconfig
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           df -h "$GITHUB_WORKSPACE"
@@ -154,7 +154,7 @@ jobs:
         working-directory: UniXNU
         run: |
           set -eux
-          ./unixnu defconfig bbk-a2_defconfig -D "$GITHUB_WORKSPACE/device"
+          ./unixnu defconfig realme-c21y-rmx3261_defconfig -D "$GITHUB_WORKSPACE/device"
           ./unixnu status -D "$GITHUB_WORKSPACE/device" | tee "$GITHUB_WORKSPACE/status.txt"
 
       - name: Build kernel
