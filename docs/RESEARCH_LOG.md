@@ -466,3 +466,7 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 ## R28 — macOS run #7 cancelled before starting (repeat of R26)
 
 Run `45599346138`, head `d4869f5b`, job `139153789235`: created `10:54:02Z`, cancelled `11:09:03Z`, `steps: []`, `runner_id: 0`, no artifacts. Same 15-minute no-runner cancellation as run #5 (R26). GitHub status showed all systems operational; `macos.yml` has no concurrency group. No compiler ran, so there is no source error to fix. Re-dispatched as run #8 on the same head. A queued macOS job must be left alone until a runner is assigned; cancelling it only resets the queue.
+
+## R29 — macOS run #8 cancelled before starting (third occurrence)
+
+Run `45602086662`, head `d4869f5b`, job `139163320726`: created `11:11:25Z`, cancelled `11:26:26Z`, `steps: []`, `runner_id: 0`, no artifacts. Third identical 15-minute no-runner cancellation (R26, R28, R29). No code change is indicated; further blind re-dispatch is not useful. Need confirmation whether a person or an external automation is cancelling, or switch the dispatch input to `macos-15`.
