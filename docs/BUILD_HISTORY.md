@@ -22,7 +22,8 @@ Source: GitHub Actions REST API for `huhukh/unixnu-eebbk-a2_x2-ums512`, branch `
 | #137 | `45514291870` | `0a22314e` | `fix: align CPU tunables patch with XNU 8796 source` | `failure` (step 17 same patch; hunks authored against a different `start.s`) |
 | #138 | `45525087213` | `0c12f50d` | `xnu: fix apple-only-cpu-tunables hunks against xnu-8796.121.2` | `failure` — toolchain 105 min success, step 17 failed in 2 s on `start.s:33`; resolved patch_series still had `arch` first (R18) |
 | #139 | `45528302149` | `3f4c55d0` | `dts: fix UMS512 GIC, PSCI, timer and UART against live DT` | `failure` — step 15 dtc pass, step 17 same arch-patch failure |
-| #140 | `45528387275` | `f09d4fa1` | `dts: rebuild C21Y board tree from live /proc/device-tree bytes` | step 15 dtc pass; step 17 expected to repeat R18 (same pre-fix board.toml) |
+| #140 | `45528387275` | `f09d4fa1` | `dts: rebuild C21Y board tree from live /proc/device-tree bytes` | `failure` — step 15 dtc pass, step 17 confirmed identical `start.s:33` arch-patch failure (R18) |
+| #141 | `45541568640` | `040b6898` | `docs: record R18 gate and trigger fresh kernel build` | in progress — first run with corrected `[kernel].patch_series = soc → os → device` |
 
 ## Build #136 detail (measured)
 
