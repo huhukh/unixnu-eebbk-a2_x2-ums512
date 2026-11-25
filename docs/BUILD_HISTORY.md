@@ -24,7 +24,7 @@ Source: GitHub Actions REST API for `huhukh/unixnu-eebbk-a2_x2-ums512`, branch `
 | #139 | `45528302149` | `3f4c55d0` | `dts: fix UMS512 GIC, PSCI, timer and UART against live DT` | `failure` — step 15 dtc pass, step 17 same arch-patch failure |
 | #140 | `45528387275` | `f09d4fa1` | `dts: rebuild C21Y board tree from live /proc/device-tree bytes` | `failure` — step 15 dtc pass, step 17 confirmed identical `start.s:33` arch-patch failure (R18) |
 | #141 | `45541568640` | `040b6898` | `docs: record R18 gate and trigger fresh kernel build` | `failure` — step 11 `Resolve C21Y defconfig`: `board.toml: Invalid statement (at line 1, column 1)` (UTF-8 BOM, R19) |
-| #142 | `45542624841` | `4b3a42e3` | `fix: remove UTF-8 BOM from board.toml` | in progress — first run with both R18 and R19 fixed |
+| #142 | `45542624841` | `4b3a42e3` | `fix: remove UTF-8 BOM from board.toml` | `failure` — first run past R18/R19; step 17 compile error: duplicate `reserved10` in xnu-8796 `pmap.h` (R20) |
 
 ## Build #136 detail (measured)
 
@@ -123,6 +123,20 @@ kernel.prelink.patch_series = ["soc:patches/xnu/series", "os:patches/xnu/series"
 ```
 
 At head `0c12f50d`, `board.toml` opened `[kernel.prelink]` before the three arrays; TOML assigned them to the nested table. The board therefore never overrode the arch profile's `patch_series`, and CI applied the xnu-10063-era arch patch before the fixed OS patch. The fixed OS patch (`sha256` of blob `f94c73d2`, 572 B) replays against `c54f35ca7679` with zero mismatches. Commit `3614a701` moved `[kernel.prelink]` to the end of the file; no run has used that layout yet.
+
+## Build #142 detail — first real XNU compile attempt (R20)
+
+| Field | Value |
+| --- | --- |
+| Run / job | `45542624841` / `138964542206`, head `4b3a42e3` |
+| Steps 1–16 | all `success`; toolchain 1h 45m 14s |
+| Step 17 | `failure` after 3m 16s |
+| First compiler error | `osfmk/arm/pmap/pmap.h:445:7: error: duplicate member 'reserved10'`, previous declaration at line 422 |
+| Failing unit | `genassym.o` (`osfmk/arm64/genassym.c`) |
+| Full log | Artifact `realme-c21y-build-check`, id `14994504798`, 39,296,602 bytes, digest `sha256:ee32498d778df2b844e98fbfae4081a0807da20adc21806298be18ad2013ea0c`; downloaded via `nightly.link` and extracted locally; `kernel-bootstrap.log` 362,974,757 bytes |
+| `kernel.macho` | still not produced; no link reached |
+
+The board fix is `8796-pmap-no-pac-reserved10.patch` (renames the PAC-slot padding field). It was validated against the pinned source before commit; see `RESEARCH_LOG.md` R20.
 
 ## Success criteria for the next run
 

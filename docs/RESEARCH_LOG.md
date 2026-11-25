@@ -347,3 +347,32 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 **Fix**
 - Stripped the three BOM bytes locally and re-uploaded `board.toml` as `4b3a42e3`. Raw bytes at that commit start `0A 73 63 68 65 6D 61` (newline then `schema`), with no `EF BB BF`. Build #142 (`45542624841`) was triggered automatically.
 - Prevention: after any browser upload of a `.toml` file, check the first three bytes via `raw.githubusercontent.com` before relying on CI.
+
+## R20 — Build #142: duplicate `reserved10` in xnu-8796 `pmap.h` on a non-PAC board
+
+**Evidence (run `45542624841`, head `4b3a42e3`)**
+- Steps 1–16 all succeeded; step 17 ran 3m 16s, so patch application and headers completed and the build reached real compilation.
+- Full `kernel-bootstrap.log` retrieved from the build-check artifact (39,296,602 byte zip via `nightly.link`; log 362,974,757 bytes). First compiler error:
+  ```
+  .../tree/.cache/xnu-work/osfmk/arm/pmap/pmap.h:445:7: error: duplicate member 'reserved10'
+    445 |         bool reserved10;
+        |              ^
+  .../pmap.h:422:7: note: previous declaration is here
+    422 |         bool reserved10;
+        |              ^
+  ```
+- It occurs while compiling `genassym.o` (`osfmk/arm64/genassym.c` → `osfmk/arm/pmap.h:43`). The later `make[1]: *** .../MakeInc.top:524: build_all_bootstrap_DEVELOPMENT^ARM64^BCM2837` is only the propagation of this compile failure.
+- No earlier `error:` in 363 MB of log. All other matches are warnings or source text containing the word "error".
+
+**Root cause**
+- The pinned source `xnu-8796.121.2` (`c54f35ca7679`) has two padding fields named `reserved10` in mutually exclusive `#if` branches of `struct pmap`:
+  - line 418–423: `#if defined(CONFIG_ROSETTA) … #else bool reserved10; #endif`
+  - line 442–446: `#if HAS_APPLE_PAC … #else bool reserved10; #endif`
+- Apple builds define `HAS_APPLE_PAC`, so the second `reserved10` is compiled out. Live C21Y `/proc/config.gz` has no `PTR_AUTH` (recorded in `HARDWARE_EVIDENCE.md`), and the board config does not define `CONFIG_ROSETTA`. With both macros absent, both `#else` branches are compiled and clang rejects the duplicate member.
+- This is independent of the new config fragments: the fields are in the pristine pinned source; earlier runs never reached this compiler pass.
+
+**Fix**
+- `patches/xnu/8796-pmap-no-pac-reserved10.patch` renames only the PAC-slot padding field to `reserved10_pac` (old line 445, new line 445). Grep of the pinned tree shows no source reference to `pmap.reserved10`, so the rename is ABI-neutral padding only.
+- Do **not** define `HAS_APPLE_PAC` or `CONFIG_ROSETTA` to hide this: C21Y hardware has no pointer authentication and no Rosetta, so either would be a false hardware claim.
+- Offline validation: hunk `@@ -442,7 +442,7 @@` replayed against the pinned file with all seven old context lines matching byte-for-byte; seven new lines; patch is 213 bytes, LF-only, ends with `0x0a`.
+- Added to `patches/xnu/series` after the sleep-hook patch. A new CI run is required; no compile or boot claim is made until it produces a non-empty `kernel.macho`.

@@ -5,18 +5,17 @@
 Read in this order:
 
 1. `PROJECT_STATE.md` §0 (current gate) and §1
-2. `docs/RESEARCH_LOG.md` **R18** (active root cause), then R17 (closed patch fix) and R9–R13
-3. `docs/BUILD_HISTORY.md` Build #138 detail and the run table
+2. `docs/RESEARCH_LOG.md` **R20** (active root cause), then R19/R18 (closed gates), R17 and R9–R13
+3. `docs/BUILD_HISTORY.md` Build #142 detail and the run table
 4. `docs/HARDWARE_EVIDENCE.md` §2.1, §3, §4.1, §8
 5. `board.toml` `[kernel]` and the three `patch_series` files
 
 Do not re-investigate the unifdef failure (closed, R9–R12), the
 `arm64_platform_sleep_hook` link failure (closed, R13), or the R17 patch context
-(fixed in `0c12f50d` and replayed with zero mismatches). **Immediate action:**
-start a fresh CI run at a post-`3614a701` head. Builds #138–#140 used a
-`board.toml` where `[kernel.prelink]` swallowed the real `[kernel]` arrays, so
-CI applied the arch patch first and could not reach our patch. Do not start that
-run with `[skip ci]` in the commit message.
+(fixed in `0c12f50d` and replayed with zero mismatches), or the BOM gate (R19).
+**Immediate action:** commit the R20 patch and trigger CI without `[skip ci]`.
+Build #142 reached real XNU compilation and died on xnu-8796's two `reserved10`
+fields; the fix is validated offline but not yet in CI.
 
 ## 1. Current state
 
@@ -25,18 +24,19 @@ run with `[skip ci]` in the commit message.
 | Branch | `port/realme-c21y-rmx3261` |
 | Build #136 | run `45490266645`, head `e189b2d9`, `failure` — step 17, 2 s after start |
 | Build #137 | run `45514291870`, head `0a22314e`, same patch defect; do not wait on it |
-| Build #138 | run `45525087213`, head `0c12f50d` (patched), EDK2 job success, Linux steps 1-15 success, step 16 in progress — this is the run that proves or disproves the `apple-only-cpu-tunables` fix |
+| Build #142 | run `45542624841`, head `4b3a42e3`, steps 1–16 success, step 17 compile failure `pmap.h:445 duplicate member 'reserved10'` (R20) |
 | Failing command | `python3 ./unixnu build kernel --skip-prelink -D <ws> --out <ws>/out` |
-| `kernel.macho` | Never produced. The link stage has never been reached. |
-| Step 16 cost | `Build Linux XNU toolchain` = 1 h 15 m 33 s of the 1 h 18 m 29 s job |
+| `kernel.macho` | Never produced. Link stage has never been reached. |
+| Step 16 cost | 1 h 45 m 14 s in #142 (dominates every iteration) |
 
 ## 2. Local delta (ready to commit)
 
-Two independent sets of changes are sitting uncommitted:
+**(a) The R20 XNU patch — new, validated offline, not yet committed:**
 
-**(a) The `apple-only-cpu-tunables.patch` fix — already committed as `0c12f50d` and under test in #138.**
+- `patches/xnu/8796-pmap-no-pac-reserved10.patch` — rename the PAC-slot padding field `reserved10` → `reserved10_pac` so the two mutually exclusive `#else` branches of xnu-8796 `struct pmap` do not collide on a non-PAC board. 213 bytes, LF, `@@ -442,7 +442,7 @@` replayed byte-for-byte against `c54f35ca7679`.
+- `patches/xnu/series` — adds it after the sleep-hook patch with the evidence note.
 
-**(b) Device-tree / ADT corrections, not yet committed, no CI validation yet:**
+**(b) Device-tree / ADT corrections — already committed and validated by `dtc` in #139/#140:**
 
 - `dts/realme-c21y-rmx3261.dts` — rewritten (was a 681-byte stub with no memory node). Adds `/memory@80000000 reg = <0 0x80000000 0 0xfffff000>`, the full 17-region `/reserved-memory` from the live tree (`tos-mem` corrected to `0x94060000`/`0x4fa0000`), `compatible = "sprd,ums512"` only, `stdout-path`.
 - `soc/UniXNU-ums512-common/dts/ums512.dtsi` — `psci` reduced to `"arm,psci-0.2"`; invented `/timer` `clock-frequency` removed; GIC `#address-cells`/`#size-cells` = 2, `interrupts = <1 9 4>` added, `AAPL,phandle` → `phandle`; UART compatible order `"sprd,ums518-uart"`, `"sprd,sc9836-uart"`.
