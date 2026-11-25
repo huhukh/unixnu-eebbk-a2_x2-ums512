@@ -119,7 +119,7 @@ in `osfmk/arm64/cpu.c`, and is added to `patches/xnu/series`. The pre-image blob
 
 ## 5. Immediate next action
 
-Commit `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch`, its OS `series` entry, and these records to `port/realme-c21y-rmx3261` **without** `[skip ci]`, so CI runs again. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. Linux rerun #144 (`45584005675`, head `dc6ddffa`) is active. macOS run #1 failed on the missing OS profile (R22, fixed); run #2 (`45584727801`) failed at `Build kernel` because Xcode 26.6 lacks `availability.pl` (R23, fixed by `8796-local-availability` patch + OS series entry). Next macOS dispatch is run #3. Do not flash/boot until both Linux and macOS produce verified artifacts.
+Commit `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch`, its OS `series` entry, and these records to `port/realme-c21y-rmx3261` **without** `[skip ci]`, so CI runs again. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. Linux rerun #144 (`45584005675`, head `dc6ddffa`) is active. macOS runs #2/#3 failed at `Build kernel`: R23 (Xcode lacks `availability.pl`) fixed by `local-availability.patch`; R24 (fakeroot kernel headers off the XNU `-I` path) fixed by `kernel-sdk-root.patch`. Both validated against `c54f35ca7679` and queued in the OS series. Next macOS dispatch is run #4. Do not flash/boot until both Linux and macOS produce verified artifacts.
 
 ## 6. Checkpoint commands
 
