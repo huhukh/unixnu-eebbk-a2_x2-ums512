@@ -415,3 +415,17 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 - New `os-profiles/ios-16.5-20F66/patches/xnu-8796/local-availability.patch`: `AVAILABILITY_PL="${XNU_AVAILABILITY_PL:-${SDKROOT}/${DRIVERKITROOT}/usr/local/libexec/availability.pl}"`. 503 bytes, LF, ends `0x0a`; hunk `@@ -34,7 +34,7 @@` replayed byte-for-byte against the pinned `make_symbol_aliasing.sh`. Added to the OS series after `8796-non-apple-iommu-bootstrap.patch`.
 - No new files, no workflow change, no guessed tool path: it uses the feed-built helper the UniXNU script already prepares.
 - No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
+
+## R24 — macOS payload run #3: fakeroot kernel headers not on the XNU include path
+
+**Evidence (run `45587004393`, head `f70f9070`, job `139111060165`)**
+- R23 fix confirmed: `installhdrs` completed; the build reached ~2.1 M log lines. Step 11 `Build kernel` still failed; steps 12–14 skipped, no `kernel.macho`.
+- Artifact `macos-logs` id `15009557293`, 22,466,228 bytes, digest `sha256:f879aeb1412eb6b123e6ce882193ffbfe723aa220e4ad8b99a3a2f40d7e8978c`. `kernel-bootstrap.log` is 304,696,997 bytes.
+- First compiler error (line 1,302,485): `libkern/os/log.c:33:10: fatal error: 'os/firehose_buffer_private.h' file not found`. Same error later at `bsd/kern/subr_log.c:77`.
+- The header **was** installed correctly at `.cache/fakeroot/usr/local/include/kernel/os/firehose_buffer_private.h` (log lines 3786/3788, `unifdef` from the pinned libdispatch feed). `build-xnu-4k-baseline.sh:119` exports `KERNEL_SDKROOT=$ROOT/.cache/fakeroot`, and line 155 builds `libfirehose_kernel` into that fakeroot.
+- Pinned `c54f35ca7679`, `makedefs/MakeInc.def:887`: `INCFLAGS_SDK = -I$(SDKROOT)/usr/local/include/kernel` — SDKROOT is the Xcode SDK, not the fakeroot DSTROOT. UniXNU's `patches/xnu/kernel-sdk-root.patch` fixes this by driving `-I` and `-L` from `KERNEL_SDKROOT`; R18 removed the arch series that carried it.
+
+**Fix**
+- New `os-profiles/ios-16.5-20F66/patches/xnu-8796/kernel-sdk-root.patch`: `export KERNEL_SDKROOT ?= $(SDKROOT)`, `LDFLAGS_KERNEL_SDK` from `$(KERNEL_SDKROOT)`, `INCFLAGS_SDK = -I$(KERNEL_SDKROOT)/usr/local/include/kernel -I$(KERNEL_SDKROOT)/usr/local/include`, `INCFLAGS_PLATFORM` from `$(KERNEL_SDKROOT)`. 1,124 bytes, LF, ends `0x0a`; hunks `@@ -642,7 +642,8 @@` and `@@ -884,8 +884,8 @@` replayed byte-for-byte against the pinned `MakeInc.def`. Added after `local-availability.patch`.
+- No invented paths: every directory already comes from `build-xnu-4k-baseline.sh` and the pinned feeds.
+- No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
