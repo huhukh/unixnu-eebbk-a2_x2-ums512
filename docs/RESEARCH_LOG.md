@@ -331,3 +331,19 @@ Step 16 `Build Linux XNU toolchain` passed (1h 15m 33s); failure is step 17, fir
 **Fix**
 - Commit `3614a701` moved `[kernel.prelink]` to the end of `board.toml`, so the three arrays now belong to `[kernel]` again. Current resolved `patch_series` is `soc → os → device`, with no `arch` entry (verified against the branch's `board.toml` and all three series files).
 - Consequence: builds #138/#139/#140 could never pass step 17 — they all started from commits with the broken board.toml. A fresh run at a post-`3614a701` head is required. The same TOML bug also meant the first build used only `arch:configs/common.config`; the corrected board now adds `soc:configs/ums512.config` and `os:configs/ios.config`.
+
+## R19 — Build #141: UTF-8 BOM in `board.toml`
+
+**Log (run `45541568640`, head `040b6898`, step 11 `Resolve C21Y defconfig`)**
+
+```
+unixnu: .../board.toml: Invalid statement (at line 1, column 1)
+```
+
+**Root cause**
+- The browser upload that committed `3614a701` wrote a UTF-8 BOM (`EF BB BF`) followed by `0A` at byte 0 of `board.toml`. Python `tomllib` treats the BOM as the first character of an unterminated statement, hence "line 1, column 1".
+- Other TOML files on the same branch (`feeds.toml`, `porting.toml`, the OS profile and SoC TOMLs) have no BOM; only `board.toml` was affected.
+
+**Fix**
+- Stripped the three BOM bytes locally and re-uploaded `board.toml` as `4b3a42e3`. Raw bytes at that commit start `0A 73 63 68 65 6D 61` (newline then `schema`), with no `EF BB BF`. Build #142 (`45542624841`) was triggered automatically.
+- Prevention: after any browser upload of a `.toml` file, check the first three bytes via `raw.githubusercontent.com` before relying on CI.
