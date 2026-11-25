@@ -6,7 +6,7 @@ _Last updated: 2026-11-25 (Build #138 root cause R18). All statements below are 
 
 Builds #138/#139/#140 all failed step 17 because of a **TOML table-scope bug**, not the R17 patch. At head `0c12f50d`, `board.toml` put `[kernel.prelink]` before its `config_fragments`/`patch_series`/`archives`, so those arrays belonged to `[kernel.prelink]`. The resolved `status.json` in run #138 proves `[kernel].patch_series` still came from the arch profile: `arch → soc → os → device`. The **first** patch applied was therefore UniXNU's xnu-10063-era `patches/xnu/apple-only-cpu-tunables.patch`, which fails at `start.s:33`; our fixed OS patch (`f94c73d2`) was never reached and replays cleanly offline.
 
-Commit `3614a701` moved `[kernel.prelink]` to the end of `board.toml`, so the current branch resolves `patch_series = soc → os → device` and adds the missing SoC/OS config fragments. **No build has run at that fixed head yet**; a new run is required. Compile, boot and hardware claims remain unproven.
+Commit `3614a701` moved `[kernel.prelink]` to the end of `board.toml`, so the board resolves `patch_series = soc → os → device` and adds the missing SoC/OS config fragments. Build #141 then failed at step 11 because that same browser upload had written a UTF-8 BOM into `board.toml` (R19); `4b3a42e3` removed the BOM. **Build #142 (`45542624841`, head `4b3a42e3`) is the first run with R18 and R19 both fixed**: steps 1–15 are green, step 16 (Linux XNU toolchain, ~75–105 min) is in progress, step 17 has not run. Compile, boot and hardware claims remain unproven.
 
 While #138 runs, the device tree was rebuilt from the live hardware and separately validated:
 
@@ -30,7 +30,7 @@ Secondary finding: `osfmk/arm64/tunables/tunables.s` and the `APPLY_TUNABLES` ma
 | Branch HEAD at Build #126 | `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge of PR #2) |
 | Docs commits after #126 | `355ac68429`, `632d60beb1`, `425233e627` — all `[skip ci]`, no new run |
 | PR | #2, `tmp/c21y-unifdef-fix` -> `port/realme-c21y-rmx3261`, merged |
-| Latest workflow run | #138 (`45525087213`, `0c12f50d`) — toolchain 105 min success, step 17 failed in 2 s on the arch-series patch (R18). #139/#140 failed identically; no run yet at the fixed board.toml |
+| Latest workflow run | #142 (`45542624841`, `4b3a42e3`) — steps 1–15 success (dtc included), step 16 toolchain running; #141 failed at step 11 on the board.toml BOM (R19), #138–#140 at step 17 on the arch patch (R18) |
 | Build #127 | `45387172638`, cancelled (docs-only `progres.md` push) |
 | Previous failure | Build #124, step 17 `Build native XNU kernel`, `Parse failure` (unifdef 2.10) |
 | Local snapshot | `C:\Users\Randika Aryasatya\Documents\Default Project\unixnu-eebbk-a2_x2-ums512-8d914b2f3dd35cefd09e123b67ea7a41e51864b4` |
