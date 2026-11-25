@@ -15,8 +15,9 @@ Do not re-investigate the unifdef failure (closed, R9–R12), the
 (fixed in `0c12f50d` and replayed with zero mismatches), or the BOM gate (R19).
 **Immediate action:** commit the R21 patch and trigger CI without `[skip ci]`.
 Build #143 confirmed R20 fixed and died on xnu-8796's unguarded Apple PPL
-SART/UAT include/calls; the fix is validated offline but not yet in CI. The
-parallel macOS payload run `45573253682` is also active.
+SART/UAT include/calls; R21's fix is in CI as build #144 (`45584005675`).
+macOS payload run #1 (`45573253682`) failed on a missing device OS profile
+(R22); `macos.yml` now installs it and run #2 (`45584727801`) is active.
 
 ## 1. Current state
 
