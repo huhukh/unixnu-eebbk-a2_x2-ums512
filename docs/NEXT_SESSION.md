@@ -17,9 +17,10 @@ Do not re-investigate the unifdef failure (closed, R9–R12), the
 Build #143 confirmed R20 fixed and died on xnu-8796's unguarded Apple PPL
 SART/UAT include/calls; R21's fix is in CI as build #144 (`45584005675`).
 macOS run #1 (`45573253682`) failed on a missing OS profile (R22, fixed);
-runs #2/#3 failed at `Build kernel`: R23 (Xcode's missing `availability.pl`)
-fixed by `local-availability.patch`; R24 (fakeroot kernel headers off the `-I`
-path) fixed by `kernel-sdk-root.patch`. Run #4 must be dispatched.
+runs #2–#4 failed at `Build kernel`: R23 (Xcode's missing `availability.pl`),
+R24 (fakeroot kernel headers off the `-I` path), then R25 (the R21 8796 port
+dropped the `pmap_phys_write_disable` forward declaration and the no-monitor
+no-op branches). All three fixes are validated; run #5 must be dispatched.
 
 ## 1. Current state
 

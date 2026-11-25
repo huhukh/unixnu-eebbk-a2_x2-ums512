@@ -429,3 +429,17 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 - New `os-profiles/ios-16.5-20F66/patches/xnu-8796/kernel-sdk-root.patch`: `export KERNEL_SDKROOT ?= $(SDKROOT)`, `LDFLAGS_KERNEL_SDK` from `$(KERNEL_SDKROOT)`, `INCFLAGS_SDK = -I$(KERNEL_SDKROOT)/usr/local/include/kernel -I$(KERNEL_SDKROOT)/usr/local/include`, `INCFLAGS_PLATFORM` from `$(KERNEL_SDKROOT)`. 1,124 bytes, LF, ends `0x0a`; hunks `@@ -642,7 +642,8 @@` and `@@ -884,8 +884,8 @@` replayed byte-for-byte against the pinned `MakeInc.def`. Added after `local-availability.patch`.
 - No invented paths: every directory already comes from `build-xnu-4k-baseline.sh` and the pinned feeds.
 - No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
+
+## R25 — macOS payload run #4: non-monitor `pmap` calls left undeclared by the R21 port
+
+**Evidence (run `45589564725`, head `226ca69e`, job `139119856889`)**
+- R23/R24 fixes confirmed: `installhdrs` and all earlier steps succeeded; `Build kernel` reached ~2.85 M log lines. Step 11 still failed; steps 12–14 skipped, no `kernel.macho`.
+- Artifact `macos-logs` id `15010388371`, 28,185,875 bytes, digest `sha256:82eaa6d112e9316a020929cfcb003062216fea462bfa506d8308b77725d5ff84`; `kernel-bootstrap.log` 394,516,869 bytes.
+- First compiler error (line 2,273,679): `pmap.c:6323:3: error: call to undeclared function 'pmap_phys_write_disable'`. Then `pmap_ppl_lockdown_pages` (line 2,275,266), `pmap_ppl_unlockdown_pages` (2,275,409) and `static declaration of 'pmap_phys_write_disable' follows non-static declaration` (2,275,427).
+- Pinned `c54f35ca7679`: `pmap.c:6315` calls `pmap_phys_write_disable()`; its `static` definition is only at `pmap.c:11938`. `pmap_cs_lockdown_pages()`/`pmap_cs_unlockdown_pages()` (`pmap.c:11620`–`11638`) call `pmap_ppl_{lock,unlock}down_pages()` in the `#else` of `#if XNU_MONITOR`, but those plural functions occur nowhere in the OSS tree. `board_config.h:90-98` defines no `XNU_MONITOR` for `BCM2837`, so the `#else` branches are live.
+- UniXNU already has the fix in `patches/xnu/non-apple-iommu-bootstrap.patch` (forward declaration of `pmap_phys_write_disable`) and `patches/xnu-12377/public-pmap-without-monitor.patch` (replace the non-monitor PPL page-range calls with `#pragma unused`). The R21 8796 port copied only the include/bootstrap hunks and dropped both.
+
+**Fix**
+- Extended `8796-non-apple-iommu-bootstrap.patch` in place: added `@@ -5815,6 +5815,8 @@` (static forward declaration before `pmap_enter_options_internal`), `@@ -11620,9 +11620,10 @@` and `@@ -11630,9 +11630,10 @@` (non-monitor branches become a comment plus `#pragma unused(kva, size, ppl_writable)`). Now 1,992 bytes, LF, ends `0x0a`; all five hunks replayed byte-for-byte against the pinned `pmap.c`.
+- Kept the `#if XNU_MONITOR` branches intact; no PPL behaviour was invented for Apple hardware.
+- No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
