@@ -12,4 +12,11 @@
 # is added on 8796 because arm_init_cpu() does not exist there, so sleep
 # stays disabled until a board supplies a verified 8796 wake path.
 8796-arm64-platform-sleep-hook.patch
+# 8796-pmap-no-pac-reserved10: xnu-8796 has two `reserved10` fields in
+# mutually exclusive CONFIG_ROSETTA / HAS_APPLE_PAC branches (pmap.h:422 and
+# pmap.h:445). The C21Y has no pointer authentication, so both `#else`
+# branches are compiled and clang rejects the duplicate member. Rename the
+# PAC-slot padding field; no source references either field. Evidence:
+# Build #142 kernel-bootstrap.log and docs/RESEARCH_LOG.md R20.
+8796-pmap-no-pac-reserved10.patch
 sdhci-block-personality.patch
