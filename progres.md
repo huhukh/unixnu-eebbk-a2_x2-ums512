@@ -13,7 +13,11 @@
 
 ## Status Sekarang
 
-- **Build #142** (`45542624841`, head `4b3a42e3`) — **GAGAL di step 17**, tapi ini pertama kalinya kompilasi XNU asli jalan (3m16s).
+- **Build #143** (`45565371465`, head `5d6b6e3`) — **GAGAL di step 17** setelah 2m05s. Fix R20 (`reserved10`) terbukti hilang; error baru: `fatal error: 'arm64/ppl/sart.h' file not found` dari `pmap.c:87` (R21).
+  - Penyebab: xnu-8796 punya include + call `sart_bootstrap()`/`uat_bootstrap()` tanpa guard; board BCM2837 tidak punya `XNU_MONITOR`/SART/UAT. OS series belum mem-port `non-apple-iommu-bootstrap` dari arch series.
+  - Fix: `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch`, 2 hunk tervalidasi byte-for-byte terhadap `c54f35ca7679`; belum di-CI.
+  - `kernel.macho` masih belum ada.
+- Build #142 (`45542624841`, head `4b3a42e3`) — **GAGAL di step 17**, tapi ini pertama kalinya kompilasi XNU asli jalan (3m16s).
   - Step 1–16 sukses; toolchain 1h45m.
   - Error compiler pertama: `osfmk/arm/pmap/pmap.h:445:7: error: duplicate member 'reserved10'` (deklarasi sebelumnya di baris 422).
   - Penyebab: xnu-8796 punya dua field `reserved10` di branch `#else` `CONFIG_ROSETTA` dan `HAS_APPLE_PAC`. C21Y tanpa PAC → dua branch aktif. Bukan salah config fragment.

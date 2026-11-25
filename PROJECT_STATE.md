@@ -1,12 +1,12 @@
 # PROJECT_STATE — Realme C21Y RMX3261 / UMS512 XNU 16.5 port
 
-_Last updated: 2026-11-25 (Build #142 root cause R20). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
+_Last updated: 2026-11-25 (Build #143 root cause R21). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
 
 ## 0. Current gate (read this first)
 
 Builds #138/#139/#140 all failed step 17 because of a **TOML table-scope bug**, not the R17 patch. At head `0c12f50d`, `board.toml` put `[kernel.prelink]` before its `config_fragments`/`patch_series`/`archives`, so those arrays belonged to `[kernel.prelink]`. The resolved `status.json` in run #138 proves `[kernel].patch_series` still came from the arch profile: `arch → soc → os → device`. The **first** patch applied was therefore UniXNU's xnu-10063-era `patches/xnu/apple-only-cpu-tunables.patch`, which fails at `start.s:33`; our fixed OS patch (`f94c73d2`) was never reached and replays cleanly offline.
 
-Commit `3614a701` moved `[kernel.prelink]` to the end of `board.toml`, so the board resolves `patch_series = soc → os → device` and adds the missing SoC/OS config fragments. Build #141 failed at step 11 on a UTF-8 BOM written by that upload (R19); `4b3a42e3` removed it. **Build #142 (`45542624841`, head `4b3a42e3`) is the first run that reached real XNU compilation**: steps 1–16 green, step 17 failed after 3m 16s on xnu-8796's duplicate `reserved10` field in `osfmk/arm/pmap/pmap.h` (R20). The fix is `8796-pmap-no-pac-reserved10.patch`, validated offline. Compile, boot and hardware claims remain unproven.
+Commit `3614a701` moved `[kernel.prelink]` to the end of `board.toml`, so the board resolves `patch_series = soc → os → device` and adds the missing SoC/OS config fragments. Build #141 failed at step 11 on a UTF-8 BOM written by that upload (R19); `4b3a42e3` removed it. Build #142 (`45542624841`) reached real XNU compilation and failed on the duplicate `reserved10` field (R20). **Build #143 (`45565371465`, head `5d6b6e3`) confirms R20 fixed**: steps 1–16 green, step 17 failed after 2m 05s on the missing Apple PPL header `arm64/ppl/sart.h` (R21). The fix is `8796-non-apple-iommu-bootstrap.patch`, validated offline. Compile, boot and hardware claims remain unproven.
 
 While #138 runs, the device tree was rebuilt from the live hardware and separately validated:
 
@@ -30,7 +30,7 @@ Secondary finding: `osfmk/arm64/tunables/tunables.s` and the `APPLY_TUNABLES` ma
 | Branch HEAD at Build #126 | `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge of PR #2) |
 | Docs commits after #126 | `355ac68429`, `632d60beb1`, `425233e627` — all `[skip ci]`, no new run |
 | PR | #2, `tmp/c21y-unifdef-fix` -> `port/realme-c21y-rmx3261`, merged |
-| Latest workflow run | #142 (`45542624841`, `4b3a42e3`) — steps 1–16 success, step 17 compile failure `pmap.h:445 duplicate member 'reserved10'` (R20); #141 failed on board.toml BOM (R19), #138–#140 on arch patch (R18) |
+| Latest workflow run | #143 (`45565371465`, `5d6b6e3`) — steps 1–16 success, step 17 compile failure `'arm64/ppl/sart.h' file not found` (R21); #142 R20, #141 BOM (R19), #138–#140 arch patch (R18) |
 | Build #127 | `45387172638`, cancelled (docs-only `progres.md` push) |
 | Previous failure | Build #124, step 17 `Build native XNU kernel`, `Parse failure` (unifdef 2.10) |
 | Local snapshot | `C:\Users\Randika Aryasatya\Documents\Default Project\unixnu-eebbk-a2_x2-ums512-8d914b2f3dd35cefd09e123b67ea7a41e51864b4` |
@@ -119,7 +119,7 @@ in `osfmk/arm64/cpu.c`, and is added to `patches/xnu/series`. The pre-image blob
 
 ## 5. Immediate next action
 
-Commit `patches/xnu/8796-pmap-no-pac-reserved10.patch`, its `patches/xnu/series` entry, and these records to `port/realme-c21y-rmx3261` **without** `[skip ci]`, so CI runs again. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. The live device memory map is proven (see `docs/HARDWARE_EVIDENCE.md` §3); the next design step is the boot handoff (FDT pointer, firmware ownership, payload/stack/heap/FD windows), not the memory layout.
+Commit `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch`, its OS `series` entry, and these records to `port/realme-c21y-rmx3261` **without** `[skip ci]`, so CI runs again. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. The parallel macOS payload run `45573253682` is also active; do not flash/boot until both produce verified artifacts.
 
 ## 6. Checkpoint commands
 
