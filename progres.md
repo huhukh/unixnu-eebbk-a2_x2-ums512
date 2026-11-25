@@ -3,6 +3,14 @@
 > File ini di-update tiap ada info/progres baru. Ringkas saja.
 > Terakhir update: 2026-11-25 (UTC).
 
+## Bukti hardware baru (read-only, belum dipakai DTS)
+
+- GPU `sprd,mali-gondul`: MMIO `0x60000000` + `0x100000`, 3 IRQ `JOB/MMU/GPU` = SPI 60, phandle `0xfd`.
+- Touchscreen SPI `0x70a00000` + `0x1000`; anak `touchscreen@0` aktif `himax,hxcommon` (getevent `himax-touchscreen`), 720×1600, IRQ GPIO 144, reset GPIO 145, SPI 10 MHz.
+- Batre: 3 node `simple-battery` (LWN/ATL/non-standard), 4872 mAh, 3.456–4.42944 V; `monitored-battery = <0x1a8 0x1a9 0x1aa>`; charger `bq2560x_charger`, fuel gauge `sc27xx-fgu`. Tidak ada alamat MMIO batre — jangan dikarang.
+- Clock controller live ditemukan (`0x20200000`, `0x32080000`, `0x62100000`, `0x62200000`); koreksi catatan lama. Mapping phandle clock UART masih belum.
+- Detail byte: `docs/HARDWARE_EVIDENCE.md` §9.
+
 ## Status Sekarang
 
 - **Build #142** (`45542624841`, head `4b3a42e3`) — **GAGAL di step 17**, tapi ini pertama kalinya kompilasi XNU asli jalan (3m16s).
