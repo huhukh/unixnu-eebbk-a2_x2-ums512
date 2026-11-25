@@ -5,13 +5,23 @@
 
 ## Status Sekarang
 
-- **Build #126** (`45385291507`) — **SEDANG BERJALAN**
+- **Build #126** (`45385291507`) — **SELESAI: GAGAL di step 17** (link), bukan lagi `Parse failure`
   - Commit: `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge PR #2)
   - EDK2 job: **sukses**
-  - XNU job: masih step 16 "Build Linux XNU toolchain" (lama)
-  - Step 13 (patch), 14 (config), 15 (DTS): **sukses**
-  - Step 17 "Build native XNU kernel": **belum** — ini tes utama (tempat Build #124 gagal)
+  - XNU step 1–16: **sukses** (termasuk step 13 patch, 15 DTS, 16 toolchain)
+  - Step 17 "Build native XNU kernel": **GAGAL** — 1 simbol undefined:
+    `_arm64_platform_sleep_hook`, direferensikan `ArmCpu::start` di `libArmCpu.a(ArmCpu.o)`
+  - **Bukti unifdef fix berhasil:** tidak ada `Parse failure` di log #126
+  - **`kernel.macho` TIDAK ada** — link gagal sebelum pengecekan `kernel.macho`
+  - Artifact `realme-c21y-build-check`: 71.555.458 byte, sha256 `f9380b35...`, isinya log/build, bukan kernel
 - Build #127 (redundan, commit progres.md) sudah **dibatalkan**.
+- **Fix link sudah di-push:** `patches/xnu/8796-arm64-platform-sleep-hook.patch` (definisi simbol hook di `osfmk/arm64/cpu.c`) + entri `patches/xnu/series`, commit `5c39de471823b72081f5afc6e1490ca3ccf199ff`.
+- **Build #128** (`45413693437`) — **SEDANG BERJALAN**
+  - EDK2 job: **sukses** (1m 44s)
+  - XNU: step 1–15 **sukses** (patch, config, DTS lolos)
+  - Step 16 "Build Linux XNU toolchain": jalan
+  - Step 17 "Build native XNU kernel": **belum** — ini penentu apakah fix link cukup
+  - Artifact XNU belum ada (baru `realme-c21y-edk2-scaffold` 68.9 KB)
 
 ## Info Hardware Baru (dari HP via ADB, read-only, 2026-11-24)
 
@@ -24,9 +34,13 @@
   - `/proc/iomem`: `80000000-81feffff` RAM, `81ff0000-81ffffff` reserved (`namespace0.0`/rebootescrow), `82000000-17fffefff` RAM.
   - Kernel code `0x80080000`, data `0x812c0000`; initrd `0x82100000-0x82a03d10`.
   - Reserved-memory (16 node): ddrbist@80000000, rebootescrow@81ff0000, audio@87500000, sipc@87800000, sp-ddr@88000000, audiodsp@89000000, cp-mem@89600000, sml@94000000, tos@94060000, logobuffer@9e000000, faceid@efaae000, framebuffer@fd708000, writeback@ff562000, ramoops@fff80000, debug@100000000, debug@844c0000.
-- **GICv3**: GICD `0x12000000`+`0x20000`, GICR `0x12040000`+`0x100000` (dari live FDT).
-- **PSCI 0.2 (smc)**; CPU: 6x Cortex-A55 (`cpu@0..500`) + 2x Cortex-A75 (`cpu@600..700`), MPIDR 0x0..0x700.
-- Timer: `arm,armv8-timer`. Console: `ttyS1` @ `0x70100000` (stdout-path `/soc/ap-apb/serial@70100000`).
+- **GICv3**: GICD `0x12000000`+`0x20000`, GICR `0x12040000`+`0x100000`, stride redistributor `0x20000` (=8 frame, cocok 8 core), maintenance PPI 9 (INTID 25) level-high, `#interrupt-cells=3` (dari live FDT).
+- **PSCI 0.2 (smc)**: node `/psci` cuma `compatible` + `method=smc`, **tanpa** HVC dan tanpa sel `cpu_suspend/migrate`; `/idle-states` `entry-method=arm,psci`.
+- CPU: 6x Cortex-A55 (`cpu@0..500`, `capacity-dmips-mhz` 544) + 2x Cortex-A75 (`cpu@600..700`, 1024). `/cpus/#address-cells=2`, tiap `reg` = `Aff1` 0x0,0x100,…,0x700 (Aff0=0, tanpa Aff2). `cpu-map`: cluster0=core0..5, cluster1=core0..1 — penamaan ODM saja, **reg yang otoritatif**.
+- Timer: `arm,armv8-timer`, PPI `<1 13 4>` secure-phys, `<1 14 4>` non-secure-phys (INTID 30, ini yg dipakai EL1), `<1 11 4>` virt, `<1 10 4>` hyp; **tidak ada** `clock-frequency`, ada `arm,no-tick-in-suspend` → frekuensi harus dari `CNTFRQ_EL0`.
+- Console/UART: `/soc/ap-apb/serial@70100000` + `@70000000`, keduanya `compatible = "sprd,ums518-uart","sprd,sc9836-uart"`, `reg` size `0x100`, SPI level-high **2** (`@70000000`) dan **3** (`@70100000`), clocks `enable`/`uart`/`source` = phandle `0x1c`/`0x1d`/`0x1e`, **tidak ada** `clock-frequency` di node.
+- Clock tree UART: `0x1c` = `/soc/apapb-gate` (`sprd,sharkl5pro-apapb-gate`, #clock-cells 1); `0x1d` = `/soc/clock-controller@20200000` (`sprd,sharkl5pro-ap-clk`, `0x20200000`+`0x1000`); `0x1e` = `/soc/clock-controller@32080000` (`sprd,sharkl5pro-aonapb-clk`, `0x32080000`+`0x1000`). Referensi `ext-26m` = **26 000 000 Hz** (`0x018CBA80`), `ext-32k` = 32768, `rco-100m` = 100 MHz; `clk-13m` = 26/2, `clk-4m3` = 26/6. Gate lain: `apahb-gate` phandle `0x24`, `aonapb-gate` phandle `0x04`, mm clk `0x06`, mm gate `0x05`. **Divisor 115200 belum dibuktikan** — jangan diasumsikan.
+- Node root lain (belum dipakai): `firmware`, `trusty` (`android,trusty-smc-v1`), `seth@0..13`, `hwfeature` (`auto`,`lwfq`), `cpuinfo_hardware`=`T610-Unisoc`, `sprd,sc-id`=`ums512 1000 1000`.
 - Boot storage: eMMC `mmcblk0` (~58.2 GiB) via `71400000.sdio`. A/B slot, aktif `_a`.
 - Partisi penting: boot_a=p40(64M), vendor_boot_a=p42(100M), dtb_a=p44(8M), dtbo_a=p46(8M), super=p48(~8.6G), vbmeta_a=p54, uboot_a=p8, trustos_a=p4, sml_a=p6.
 - Boot image `boot_a` header v2: kernel_size 0x1496010, ramdisk_size 0x903d10 (sama dgn initrd live), kernel_addr 0x8000, ramdisk_addr 0x5400000, tags_addr 0x100, page_size 0x800. **Base/relokasi bootloader BELUM terbukti** (initrd live 0x82100000 != 0x80000000+0x5400000) — jangan dipakai sebagai handoff address dulu.
@@ -56,3 +70,97 @@
 - 2026-11-24: commit `progres.md` (d1ef1f4) memicu Build #127 -> dibatalkan.
 - 2026-11-24: ADB read-only ke HP (root Magisk) -> ambil memory map, GIC, PSCI, CPU, partisi, FDT.
 - 2026-11-24: boot handoff evidence: kernel runtime `0x80080000`, compressed load `0x80008000` (header), initrd `0x82100000`, no KASLR seed; protokol arm64 `x0`=FDT (belum diuji dgn XNU).
+- 2026-11-24 ~14:24 UTC: patch `8796-arm64-platform-sleep-hook.patch` + `series` di-commit ke branch (`5c39de4`) → **Build #128** mulai; EDK2 sukses, XNU lanjut step 16.
+- 2026-11-24: ADB read-only probe ke-2 (UART/clock/GIC/timer/CPU topology) → detail masuk `docs/HARDWARE_EVIDENCE.md` §2.1. Belum ada klaim driver.
+
+---
+
+## Sesi 2026-11-25 — akar Build #136/#137 ketemu, data HP tambahan
+
+### Akar masalah (terbukti, bukan dugaan)
+
+`apple-only-cpu-tunables.patch` **tidak cocok** dengan source XNU yang dipakai CI.
+
+Diverifikasi langsung terhadap tree yang di-pin CI: `apple-oss-distributions/xnu` commit `c54f35ca767986246321eb901baf8f5ff7923f6a` (tag `xnu-8796.121.2`, 873 baris di `osfmk/arm64/start.s`).
+
+| Hunk | Ditulis di patch | Kenyataan di source | Hasil |
+| --- | --- | --- | --- |
+| 1 | `@@ -33,7 +33,9 @@` | blok memang di baris 33-39 | **cocok** |
+| 2 | `@@ -783,10 +785,13 @@` + konteks `#if HAS_CLUSTER && !NO_CPU_OVRD` | `#endif // APPLE_ARM64_ARCH_FAMILY` di 775, `#if HAS_CLUSTER` di 783 (tanpa `&& !NO_CPU_OVRD`) | **GAGAL** |
+
+Jadi hunk 2 harus mulai di baris **775**, bukan 783, dan konteks penutup harus `#if HAS_CLUSTER`.
+
+Patch upstream UniXNU (`zus12873/UniXNU:patches/xnu/apple-only-cpu-tunables.patch`) punya **dua cacat yang sama**. Artinya ini bukan salah ketik di repo kita — patch upstream memang dibuat untuk tree yang `start.s`-nya beda dari rilis OSS `xnu-8796.121.2`.
+
+### Temuan tambahan yang penting
+
+`osfmk/arm64/tunables/tunables.s` **tidak ada** di rilis OSS `xnu-8796.121.2` (sudah dicek: 5328 path) maupun `xnu-10063.141.1` (5529 path). Makro `APPLY_TUNABLES` juga tidak ada di mana pun. Tapi `start.s` baris 36 meng-`#include` file itu dan baris 780 memanggil `APPLY_TUNABLES`.
+
+`APPLE_ARM64_ARCH_FAMILY` **tidak** di-define oleh `config/MASTER.arm64.bcm2837`, `config/MASTER`, `osfmk/conf/files.arm64`, `asm.h`, maupun `proc_reg.h` untuk board non-Apple. Jadi guard-nya bernilai **false**, dan justru itulah yang menyelamatkan build: `#include` dan `APPLY_TUNABLES` ikut hilang. Tanpa guard ini, assemble akan gagal karena file tidak ada.
+
+**Konsekuensi:** patch ini **wajib** untuk semua build arm64 non-Apple di xnu-8796. Bukan sekadar "buang tuning Apple".
+
+### Yang sudah diperbaiki
+
+`os-profiles/ios-16.5-20F66/patches/xnu-8796/apple-only-cpu-tunables.patch` ditulis ulang, hunk dihitung ulang terhadap `c54f35ca7679`:
+
+- hunk 1: `@@ -33,7 +33,9 @@`
+- hunk 2: `@@ -775,9 +777,11 @@`
+- baris `index a261552b8cdd..f435c87d6ac7` dibuang (git tidak butuh untuk `git apply`)
+- 572 byte, LF semua, diakhiri newline, spasi+tanggal di baris konteks ber-tab tetap utuh
+
+**Verifikasi sebelum commit:** kedua hunk di-replay terhadap file asli yang di-fetch, **setiap byte konteks cocok**. Tidak perlu tunggu build 78 menit untuk tahu patch ini benar.
+
+Sebagai tambahan, **seluruh 60 hunk dari 12 patch** di OS series di-replay terhadap tree yang di-pin. Hasilnya: hanya patch ini yang benar-benar tidak cocok. Empat lainnya (`clang-uio-stackbuf` di `sys_generic.c`/`vfs_lookup.c`, `native-aes-personality`, `zzx-pmap-sync-64bit-pa`) hanya **offset** karena patch sebelumnya menggeser teks — dan `git apply` toleran terhadap offset.
+
+### Data HP baru (ADB, read-only, 2026-11-25)
+
+**Konfigurasi CPU/MMU dari** `/proc/config.gz` (4799 baris):
+
+| Opsi | Nilai | Arti untuk port |
+| --- | --- | --- |
+| `CONFIG_ARM64_VA_BITS` | `39` | 512 GiB VA — cocok layout XNU arm64 39-bit, **jangan** asumsikan 48-bit |
+| `CONFIG_ARM64_4K_PAGES` | `y` | granule 4 KiB |
+| `CONFIG_PHYS_ADDR_T_64BIT` | `y` | `phys_addr_t` 64-bit |
+| `CONFIG_ARM64_PAN` / `_UAO` / `_LSE_ATOMICS` / `_HW_AFDBM` | `y` | fitur CPU tersedia |
+| `CONFIG_ARM64_TAGGED_ADDR_ABI` | `y` | TBI aktif |
+| `CONFIG_UNMAP_KERNEL_AT_EL0` | `y` | Linux pakai trampoline EL0 — **XNU tidak punya padanannya** |
+| `CONFIG_ARM64_PTR_AUTH` / `_BTI` / `_MTE` / `_VHE` / `ARM64_PA_BITS` | **tidak ada** | jangan aktifkan fitur ini |
+| Errata aktif | `826319 827319 824069 819472 845719 843419 1024718 858921` | set erratum A55/A75 yang dipakai vendor |
+| `CONFIG_RANDOMIZE_BASE` | `y` | KASLR aktif, tapi FDT **tidak** punya `chosen/kaslr-seed` → bootloader bukan sumber entropi |
+
+**Frekuensi timer sekarang TERBUKTI = 26 MHz.** Dari `/proc/timer_list`, clock event device per-CPU:
+
+- `arch_sys_timer`, `set_next_event: arch_timer_set_next_event_phys`
+- `mult = 111669150`, `shift = 32`
+- `2^32 / 111669150` = **38.4615 ns** per cycle → **CNTFRQ = 26 000 000 Hz**
+
+Ini mengonfirmasi `ext-26m` di DT secara independen, dan cocok dengan referensi 26 MHz yang dibutuhkan rantai clock UART SPRD. **Nilai ini terukur dari kernel yang hidup**, jadi setup timer XNU boleh memakai 26 MHz di board ini — tapi tetap bukan bukti XNU membacanya dengan benar.
+
+Ada juga broadcast clock event device kedua `sprd_timer` (`mult 70369`, `shift 31` ≈ 30 518 ns) untuk `tick_handle_oneshot_broadcast` dengan mask `b8` (CPU 3,4,5,7). Clocksource tersedia: `arch_sys_counter` dan `sprd_suspend_timer` (yang terakhir vendor-specific, tidak ada padanannya di XNU).
+
+**Routing GIC terbukti saat runtime** dari `/proc/interrupts`:
+
+| IRQ tercetak | Perangkat |
+| --- | --- |
+| `30` | `arch_timer` — PPI 14, **berjalan di kedelapan CPU** |
+| `103` | `/soc/aon/timer@32050000` |
+| `35` | `sprd_serial1` |
+| `42`/`51`/`52` | `mmc0`/`mmc1`/`mmc2` |
+| `58`/`59` | `GSP0`/`DISPC` |
+
+`arch_timer` punya hitungan non-nol di **semua 8 CPU** → PPI 14 benar-benar terkirim ke setiap PE, dan redistributor GICv3 untuk 8 frame hidup semua.
+
+### Yang masih kurang / belum terbukti
+
+- `kernel.macho` masih belum pernah ada. Link belum pernah tercapai.
+- Handoff final (pointer FDT, ownership, window payload, stack/heap, window FD) belum terbukti.
+- Divisor baud UART SPRD 26 MHz → 115200 belum terbukti (yang terbukti baru referensi 26 MHz-nya).
+- Apakah pmap arm64 XNU jalan dengan `VA_BITS=39` + 4 KiB di board ini — nilainya cocok dengan kernel stok, tapi tabel XNU belum pernah dibangun.
+- Boot XNU di HP belum dicoba/diklaim. Kompilasi sukses != boot sukses != hardware didukung.
+
+### Log
+
+- 2026-11-25: ambil `/proc/config.gz`, `/proc/timer_list`, `/proc/interrupts`, `/sys/devices/system/clocksource`, listing `/proc/device-tree` — semua read-only.
+- 2026-11-25: replay 60 hunk dari 12 patch terhadap tree pinned; hanya `apple-only-cpu-tunables.patch` yang gagal.
+- 2026-11-25: `apple-only-cpu-tunables.patch` ditulis ulang + diverifikasi byte-per-byte.

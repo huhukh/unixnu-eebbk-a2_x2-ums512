@@ -1,6 +1,22 @@
 # PROJECT_STATE — Realme C21Y RMX3261 / UMS512 XNU 16.5 port
 
-_Last updated: 2026-11-24 (continuation session). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
+_Last updated: 2026-11-25 (patch-validation session). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
+
+## 0. Current gate (read this first)
+
+Build #136 (`45490266645`, head `e189b2d9`) failed in step 17 `Build native XNU kernel` 2 s after start:
+
+```
+== kernel: patch apple-only-cpu-tunables.patch
+error: patch failed: osfmk/arm64/start.s:33
+error: osfmk/arm64/start.s: patch does not apply
+```
+
+Root cause is proven (docs/RESEARCH_LOG.md R17): the patch's second hunk was authored for a different `start.s`. It declared `@@ -783,10 +785,13 @@` and closed with `#if HAS_CLUSTER && !NO_CPU_OVRD`; the pinned release `xnu-8796.121.2` / commit `c54f35ca7679` has `#endif // APPLE_ARM64_ARCH_FAMILY` at line 775, the MIDR block at 777-780, and `#if HAS_CLUSTER` (no `&& !NO_CPU_OVRD`) at 783. The same two defects exist in upstream `zus12873/UniXNU:patches/xnu/apple-only-cpu-tunables.patch`.
+
+The patch has been rewritten locally with hunks `@@ -33,7 +33,9 @@` and `@@ -775,9 +777,11 @@`, verified byte-for-byte against the CI-pinned file, and is ready to commit. All 60 hunks of the 12 OS-series patches were replayed against the pinned tree; this was the only genuine mismatch.
+
+Secondary finding: `osfmk/arm64/tunables/tunables.s` and the `APPLY_TUNABLES` macro do **not** exist in `xnu-8796.121.2` nor `xnu-10063.141.1`, and `APPLE_ARM64_ARCH_FAMILY` is undefined for this board, so the guard added by the patch is what keeps assemble working. The patch is mandatory, not cosmetic.
 
 ## 1. Exact source state
 
@@ -8,9 +24,11 @@ _Last updated: 2026-11-24 (continuation session). All statements below are evide
 | --- | --- |
 | Repository | `https://github.com/huhukh/unixnu-eebbk-a2_x2-ums512` |
 | Branch | `port/realme-c21y-rmx3261` |
-| Branch HEAD | `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge of PR #2) |
+| Branch HEAD at Build #126 | `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge of PR #2) |
+| Docs commits after #126 | `355ac68429`, `632d60beb1`, `425233e627` — all `[skip ci]`, no new run |
 | PR | #2, `tmp/c21y-unifdef-fix` -> `port/realme-c21y-rmx3261`, merged |
-| Latest workflow run | Build #126, `https://github.com/huhukh/unixnu-eebbk-a2_x2-ums512/actions/runs/45385291507`, in progress (EDK2 success) |
+| Latest workflow run | #137 (`45514291870`, head `0a22314e`) — patch still wrong, superseded by the fix in §0 |
+| Build #127 | `45387172638`, cancelled (docs-only `progres.md` push) |
 | Previous failure | Build #124, step 17 `Build native XNU kernel`, `Parse failure` (unifdef 2.10) |
 | Local snapshot | `C:\Users\Randika Aryasatya\Documents\Default Project\unixnu-eebbk-a2_x2-ums512-8d914b2f3dd35cefd09e123b67ea7a41e51864b4` |
 | XNU source | `apple-oss-distributions/xnu` tag `xnu-8796.121.2` → commit `c54f35ca767986246321eb901baf8f5ff7923f6a`, equal to the OS-profile pin |
@@ -53,6 +71,32 @@ Local verification performed:
 - `unifdef 2.12` on unpatched `OSEndianTypes.h`: exit `0`.
 - Git blob pre/post hashes match the Nuwa patch post-images exactly.
 
+## 3a. Build #126 link failure and fix
+
+Build #126 proved the unifdef fix: step 13 applied the patch, no `Parse failure` appears, step 16 built the toolchain, and step 17 reached the kernel link. It then failed with exactly one undefined symbol:
+
+```
+Undefined symbols for architecture arm64:
+  "_arm64_platform_sleep_hook", referenced from:
+      __ZN6ArmCpu5startEP9IOService in libArmCpu.a(ArmCpu.o)
+ld: symbol(s) not found for architecture arm64
+```
+
+Root cause, from source:
+
+- `UniXNU/ArmCpu` revision `5f370269…`, `ArmCpu.cpp:65`, declares the board sleep hook `weak_import`.
+- The pinned XNU `osfmk/arm64/cpu.c` (blob `94e91306b14364f720ea80e46d853035aabd78e6`) never defines it.
+- UniXNU's device records state that a **static** kernel link refuses to leave any `weak_import` undefined. `weak_import` only defers resolution for Darwin dynamic linking.
+- The newer-XNU reference patch defines the hook and calls it from `ml_arm_sleep`, but it also calls `arm_init_cpu()`, which does not exist in xnu-8796.
+
+Fix: `patches/xnu/8796-arm64-platform-sleep-hook.patch` defines
+
+```c
+void (*arm64_platform_sleep_hook)(boolean_t boot_cpu) = NULL;
+```
+
+in `osfmk/arm64/cpu.c`, and is added to `patches/xnu/series`. The pre-image blob hash matches GitHub's tree entry for the pinned commit; the hunk reproduces post-image `9a43e588…`. No call site is added on 8796, and the kernel args do not set `platform-sleep=1`, so sleep behaviour is unchanged. This is a link fix only; sleep support remains a separate, unverified feature.
+
 ## 4. Claim boundaries
 
 | Claim | Status |
@@ -60,8 +104,11 @@ Local verification performed:
 | Host reproduction of the parser failure | **Done** |
 | Minimal source fix identified and locally verified | **Done** |
 | Fix committed and pushed to GitHub | **Done** — PR #2 merged at `100a64ccee1d153b2baa7432a47a2b5877f09ed6` |
-| GitHub Actions XNU kernel compile success | **Pending** — Build #126 in progress |
-| Non-empty `kernel.macho` artifact verified | **Not yet** |
+| Unifdef fix proven in CI | **Done** — Build #126 applied the patch, no `Parse failure` |
+| Build #126 kernel link | **Failed** — one undefined symbol, `_arm64_platform_sleep_hook` |
+| Link fix committed | **Pending** — patch created locally; next commit will trigger a new run |
+| GitHub Actions XNU kernel compile success | **Not yet** |
+| Non-empty `kernel.macho` artifact verified | **Not yet** — Build #126 failed before the `kernel.macho` gate; its artifact holds logs/build output only |
 | Live hardware evidence over ADB (read-only) | **Done** — memory map, GIC, PSCI, CPU, storage; see `docs/HARDWARE_EVIDENCE.md` |
 | Boot success on Realme C21Y | **Not claimed** |
 | Full hardware support | **Not claimed**; only the evidence in `docs/HARDWARE_EVIDENCE.md` is established |
@@ -69,7 +116,7 @@ Local verification performed:
 
 ## 5. Immediate next action
 
-Wait for Build #126 (`45385291507`) on `100a64c`. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. The live device memory map is now proven (see `docs/HARDWARE_EVIDENCE.md` §3); the next design step is the boot handoff (FDT pointer, firmware ownership, payload/stack/heap/FD windows), not the memory layout.
+Commit `patches/xnu/8796-arm64-platform-sleep-hook.patch` plus the `patches/xnu/series` entry (and these records) to `port/realme-c21y-rmx3261` **without** `[skip ci]`, so CI runs again. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. The live device memory map is proven (see `docs/HARDWARE_EVIDENCE.md` §3); the next design step is the boot handoff (FDT pointer, firmware ownership, payload/stack/heap/FD windows), not the memory layout.
 
 ## 6. Checkpoint commands
 
