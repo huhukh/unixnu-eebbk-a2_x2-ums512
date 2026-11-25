@@ -4,6 +4,12 @@
 # SOC profile already applies arch:patches/xnu/series; this series only adds xnu-8796 ports and XnuPrelink components.
 
 ../xnu-8796/apple-only-cpu-tunables.patch
+# xnu-8796 pmap.c includes arm64/ppl/sart.h and uat.h unconditionally and calls
+# sart_bootstrap()/uat_bootstrap(). Those Apple PPL headers are absent from the
+# pinned source and BCM2837 defines no XNU_MONITOR_ANS2_SART/UAT_PPL. This
+# 8796 port of UniXNU's non-apple-iommu-bootstrap patch guards all four sites,
+# exactly as the arch (xnu-10063) series does. Evidence: build #143 R21.
+../xnu-8796/8796-non-apple-iommu-bootstrap.patch
 ../xnu-8796/external-archive-dependencies.patch
 ../xnu-8796/native-aes-personality.patch
 ../xnu-8796/source-machine-layer.patch
