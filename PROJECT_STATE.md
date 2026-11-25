@@ -1,10 +1,12 @@
 # PROJECT_STATE — Realme C21Y RMX3261 / UMS512 XNU 16.5 port
 
-_Last updated: 2026-11-25 (live-DT reconciliation + Build #138 session). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
+_Last updated: 2026-11-25 (Build #138 root cause R18). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
 
 ## 0. Current gate (read this first)
 
-The `apple-only-cpu-tunables.patch` defect is fixed and committed as `0c12f50d`; Build #138 (`45525087213`, head `0c12f50d`) is the run that proves or disproves it. At the time of writing #138 has passed steps 1-15 and is inside step 16 (`Build Linux XNU toolchain`, ~75 min); step 17 `Build native XNU kernel` has not run, so **no compile claim exists yet**.
+Builds #138/#139/#140 all failed step 17 because of a **TOML table-scope bug**, not the R17 patch. At head `0c12f50d`, `board.toml` put `[kernel.prelink]` before its `config_fragments`/`patch_series`/`archives`, so those arrays belonged to `[kernel.prelink]`. The resolved `status.json` in run #138 proves `[kernel].patch_series` still came from the arch profile: `arch → soc → os → device`. The **first** patch applied was therefore UniXNU's xnu-10063-era `patches/xnu/apple-only-cpu-tunables.patch`, which fails at `start.s:33`; our fixed OS patch (`f94c73d2`) was never reached and replays cleanly offline.
+
+Commit `3614a701` moved `[kernel.prelink]` to the end of `board.toml`, so the current branch resolves `patch_series = soc → os → device` and adds the missing SoC/OS config fragments. **No build has run at that fixed head yet**; a new run is required. Compile, boot and hardware claims remain unproven.
 
 While #138 runs, the device tree was rebuilt from the live hardware and separately validated:
 
@@ -28,7 +30,7 @@ Secondary finding: `osfmk/arm64/tunables/tunables.s` and the `APPLY_TUNABLES` ma
 | Branch HEAD at Build #126 | `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge of PR #2) |
 | Docs commits after #126 | `355ac68429`, `632d60beb1`, `425233e627` — all `[skip ci]`, no new run |
 | PR | #2, `tmp/c21y-unifdef-fix` -> `port/realme-c21y-rmx3261`, merged |
-| Latest workflow run | #140 (`f09d4fa1`, DTS rebuild) and #139 (`3f4c55d0`, DTSI fix) — both passed step 15 `Compile C21Y device tree`; #138 (`0c12f50d`) is the patch-fix kernel run, step 16 at the time of writing |
+| Latest workflow run | #138 (`45525087213`, `0c12f50d`) — toolchain 105 min success, step 17 failed in 2 s on the arch-series patch (R18). #139/#140 failed identically; no run yet at the fixed board.toml |
 | Build #127 | `45387172638`, cancelled (docs-only `progres.md` push) |
 | Previous failure | Build #124, step 17 `Build native XNU kernel`, `Parse failure` (unifdef 2.10) |
 | Local snapshot | `C:\Users\Randika Aryasatya\Documents\Default Project\unixnu-eebbk-a2_x2-ums512-8d914b2f3dd35cefd09e123b67ea7a41e51864b4` |

@@ -233,13 +233,21 @@ mengarang nilai lain justru tidak berdasar.
 
 ### Status build
 
-- Build #138 (run `45525087213`, head `0c12f50d`) masih berjalan; job EDK2
-  sukses, langkah 1-15 job Linux sukses (termasuk kompilasi DTS), langkah 16
-  (`Build Linux XNU toolchain`) sedang jalan. Langkah 17 (`Build native XNU
-  kernel`) belum mulai, jadi klaim "link berhasil" belum boleh dibuat.
-- Perubahan DTS/`board.toml` sesi ini sudah di-commit dan di-push:
-  `3f4c55d0` (dtsi), `f09d4fa1` (board DTS), `3614a701` (chip_id + docs),
-  `1635c69b` (docs, `[skip ci]`).
-- **Build #139 dan #140 sama-sama lolos langkah 15 `Compile C21Y device tree`**,
-  jadi `dtc` menerima DTS/DTSI baru (sintaks + jumlah cell). Itu bukan bukti
-  ADT, bukan bukti handoff, bukan bukti hardware.
+- **Build #138/#139/#140 gagal di langkah 17, bukan karena patch R17.** Toolchain
+  sukses 105 menit, lalu `git apply` gagal 2 detik di `start.s:33`. `status.json`
+  di ringkasan run membuktikan `board.kernel.patch_series` masih
+  `arch → soc → os → device`: pada head `0c12f50d`, header `[kernel.prelink]`
+  ditulis **sebelum** array `patch_series`, sehingga array itu masuk ke tabel
+  `[kernel.prelink]` dan board tidak pernah mengganti daftar arsitektur.
+  Patch yang gagal adalah patch xnu-10063 bawaan `arch:patches/xnu/series`;
+  patch OS yang sudah diperbaiki (`f94c73d2`) bahkan tidak pernah dipakai dan
+  sudah diverifikasi cocok byte-per-byte. Lihat R18.
+- Commit `3614a701` memindahkan `[kernel.prelink]` ke akhir `board.toml`.
+  Sekarang `patch_series = soc → os → device` dan fragment `soc`/`os` ikut
+  terpakai. **Belum ada build yang jalan di head yang sudah benar** — run baru
+  diperlukan. Klaim compile/boot/hardware masih nol.
+- Perubahan DTS/`board.toml` sudah di-push: `3f4c55d0` (dtsi), `f09d4fa1`
+  (board DTS), `3614a701` (chip_id + perbaikan tabel + docs).
+- **Build #139 dan #140 lolos langkah 15 `Compile C21Y device tree`** —
+  `dtc` menerima DTS/DTSI baru (sintaks + jumlah cell). Bukan bukti ADT,
+  handoff, atau hardware.
