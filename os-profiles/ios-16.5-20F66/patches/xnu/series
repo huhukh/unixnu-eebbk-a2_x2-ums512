@@ -16,6 +16,11 @@
 # into .cache/fakeroot and exports XNU_AVAILABILITY_PL; this 8796 port of
 # UniXNU's arch patch makes the script honour that variable.
 ../xnu-8796/local-availability.patch
+# macOS build #3 R24: libfirehose_kernel installs its private header at
+# .cache/fakeroot/usr/local/include/kernel/os/, but xnu-8796 MakeInc.def only
+# adds -I$(SDKROOT)/usr/local/include/kernel. Port UniXNU's kernel-sdk-root
+# patch so KERNEL_SDKROOT (the fakeroot DSTROOT) drives both -I and -L paths.
+../xnu-8796/kernel-sdk-root.patch
 ../xnu-8796/external-archive-dependencies.patch
 ../xnu-8796/native-aes-personality.patch
 ../xnu-8796/source-machine-layer.patch
