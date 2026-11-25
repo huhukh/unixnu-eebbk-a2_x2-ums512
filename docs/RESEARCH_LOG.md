@@ -450,3 +450,15 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 - Workflow run `failure`, job `139130078007` `cancelled`: created/started `10:11:06Z`, completed `10:26:07Z`, `steps: []`, `runner_id: 0`, `runner_name: ""`, no artifacts. The head SHA contains the R25 patch (patch commit `f7c2f5f8` is an ancestor).
 - `macos.yml` has no `concurrency` group and `timeout-minutes: 360`; the 15-minute gap is not a workflow limit. No compiler ran and no log exists, so this is a runner/cancellation event, not a source failure.
 - No code change is justified: re-dispatch the same head with `macos-26`, Xcode `26.6`, `kernel payload`, `upload_images=true`, `skip_bindings_check=true`, `unique_chip_id=0x8015`.
+
+## R27 — macOS run #6 / Linux #144: `ptep_get_iommu` undefined on non-monitor pmap
+
+**Evidence**
+- macOS run #6 (`45595558329`, head `bd6839f2`, job `139140589958`): R25 fix confirmed — `pmap_phys_write_disable` and the PPL page-range calls no longer error. Step 11 still failed. Artifact `macos-logs` id `15013662453`, 26,783,842 bytes, digest `sha256:eb291b6f424d4f39f7f423675de6294940b7207837b45c19436ccae84f74132d`; first compiler error (log line 2,278,663): `pmap.c:4688:16: error: call to undeclared function 'ptep_get_iommu'` (build line = pinned 4680 + 8 R21 lines).
+- Linux #144 (`45584005675`, head `dc6ddffa`, before R25): artifact `realme-c21y-build-check` id `15013247968`, 48,833,568 bytes, digest `sha256:bd008d27f071bb1d8cd295a91d2b9440f7e3fef7e89081281ba85d55acc7d43f`. Its first pmap error is the same `ptep_get_iommu` case (line 2,864,581) followed by the R25 errors, confirming one root cause across both hosts.
+- Pinned `c54f35ca7679`, `pmap.c:4678-4681`: the `PMAP_OPTIONS_COMPRESSOR` panic calls `ptep_get_iommu(pte_p)` outside `#if XNU_MONITOR`; that helper appears nowhere in the OSS tree. UniXNU's `patches/xnu-12377/public-pmap-without-monitor.patch` prints `(void *)pte_p` instead, and `patches/xnu/non-apple-iommu-bootstrap.patch` makes the same substitution.
+
+**Fix**
+- Added `@@ -4678,5 +4678,5 @@` to `8796-non-apple-iommu-bootstrap.patch`: `ppnum, (void *)pte_p, pve_p);`. The patch is now 2,288 bytes, LF, ends `0x0a`; all six hunks are ascending and replayed byte-for-byte against pinned `pmap.c`.
+- No stub helper, no guessed header, no behaviour change beyond the panic argument.
+- No payload/boot claim until a re-dispatched run produces a verified `kernel.macho` and `payload.img`.
