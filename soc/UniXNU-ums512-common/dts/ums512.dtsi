@@ -87,13 +87,18 @@
 	timer {
 		compatible = "arm,armv8-timer";
 		unixnu,adt-name = "timer";
-		/* Vendor FDT: PPI 13/14/11/10, level high. */
+		/* live: /timer/interrupts = 1 13 4, 1 14 4, 1 11 4, 1 10 4.
+		 * live /timer has NO clock-frequency; the 26 MHz value proven from
+		 * /proc/timer_list goes on /cpus/timebase-frequency instead (the ADT
+		 * generator reads it from there). */
 		interrupts = <1 13 4>, <1 14 4>, <1 11 4>, <1 10 4>;
-		clock-frequency = <26000000>;
 	};
 
 	psci {
-		compatible = "arm,psci-1.0", "arm,psci-0.2";
+		/* live: /psci/compatible = "arm,psci-0.2" only. Claiming 1.0 would
+		 * advertise SYSTEM_RESET2 / OS-initiated CPU_SUSPEND that this
+		 * firmware does not implement. */
+		compatible = "arm,psci-0.2";
 		method = "smc";
 	};
 
@@ -106,23 +111,39 @@
 		gic: interrupt-controller@12000000 {
 			compatible = "arm,gic-v3";
 			unixnu,adt-name = "intc";
+			/* live: reg = <0 0x12000000 0 0x20000>, <0 0x12040000 0 0x100000> */
 			reg = <0 0x12000000 0 0x20000>,	/* GICD */
 			      <0 0x12040000 0 0x100000>;	/* GICR, 8 frames */
-			AAPL,phandle = <0x1>;
+			/* Replacement for the non-standard AAPL,phandle that used to be
+			 * here: dtc resolves the &gic label to this standard property and
+			 * the ADT generator only accepts 'phandle'. */
+			phandle = <0x1>;
 			#interrupt-cells = <3>;
-			#address-cells = <0>;
+			/* live: both are 2, not 0. */
+			#address-cells = <2>;
+			#size-cells = <2>;
 			interrupt-controller;
+			/* live: redistributor-stride = <0 0x20000>, one redistributor region. */
 			redistributor-stride = <0 0x20000>;
 			#redistributor-regions = <1>;
+			/* live: maintenance interrupt PPI 9, level high. */
+			interrupts = <1 9 4>;
 		};
 
 		uart1: serial@70100000 {
-			compatible = "sprd,sc9836-uart";
+			/* live: "sprd,ums518-uart" is the SoC-specific identity and comes
+			 * first; "sprd,sc9836-uart" is the generic fallback. */
+			compatible = "sprd,ums518-uart", "sprd,sc9836-uart";
 			unixnu,adt-name = "uart0";
 			reg = <0 0x70100000 0 0x100>;
 			interrupts = <0 3 4>;
 			current-speed = <115200>;
 			status = "okay";
+			/* live: clock-names = "enable","uart","source". The matching
+			 * 'clocks' phandles are omitted until the UMS512 clock
+			 * controller node is described with proven register data; a
+			 * reference to a phandle we cannot source would fail the ADT
+			 * generator's unresolved-reference check. */
 		};
 
 		/* Framebuffer left running by the stock bootloader.
