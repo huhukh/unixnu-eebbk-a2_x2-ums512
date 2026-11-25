@@ -4,6 +4,11 @@
 # SOC profile already applies arch:patches/xnu/series; this series only adds xnu-8796 ports and XnuPrelink components.
 
 ../xnu-8796/apple-only-cpu-tunables.patch
+# Linux build #146 R32: link failed on _ml_enable_monitor (arm_vm_init.c) and
+# _CleanPoC_DcacheRegion_Force_nopreempt_nohid (pmap.c). Neither has a definition
+# in the OSS tree; UniXNU's non-apple-cache-monitor patch guards the monitor call
+# and aliases the cache clean symbol for non-Apple targets. Port both hunks.
+../xnu-8796/8796-non-apple-cache-monitor.patch
 # xnu-8796 pmap.c includes arm64/ppl/sart.h and uat.h unconditionally and calls
 # sart_bootstrap()/uat_bootstrap(). Those Apple PPL headers are absent from the
 # pinned source and BCM2837 defines no XNU_MONITOR_ANS2_SART/UAT_PPL. This
