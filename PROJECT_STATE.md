@@ -1,20 +1,21 @@
 # PROJECT_STATE — Realme C21Y RMX3261 / UMS512 XNU 16.5 port
 
-_Last updated: 2026-11-25 (patch-validation session). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
+_Last updated: 2026-11-25 (live-DT reconciliation + Build #138 session). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
 
 ## 0. Current gate (read this first)
 
-Build #136 (`45490266645`, head `e189b2d9`) failed in step 17 `Build native XNU kernel` 2 s after start:
+The `apple-only-cpu-tunables.patch` defect is fixed and committed as `0c12f50d`; Build #138 (`45525087213`, head `0c12f50d`) is the run that proves or disproves it. At the time of writing #138 has passed steps 1-15 and is inside step 16 (`Build Linux XNU toolchain`, ~75 min); step 17 `Build native XNU kernel` has not run, so **no compile claim exists yet**.
 
-```
-== kernel: patch apple-only-cpu-tunables.patch
-error: patch failed: osfmk/arm64/start.s:33
-error: osfmk/arm64/start.s: patch does not apply
-```
+While #138 runs, the device tree was rebuilt from the live hardware and separately validated:
 
-Root cause is proven (docs/RESEARCH_LOG.md R17): the patch's second hunk was authored for a different `start.s`. It declared `@@ -783,10 +785,13 @@` and closed with `#if HAS_CLUSTER && !NO_CPU_OVRD`; the pinned release `xnu-8796.121.2` / commit `c54f35ca7679` has `#endif // APPLE_ARM64_ARCH_FAMILY` at line 775, the MIDR block at 777-780, and `#if HAS_CLUSTER` (no `&& !NO_CPU_OVRD`) at 783. The same two defects exist in upstream `zus12873/UniXNU:patches/xnu/apple-only-cpu-tunables.patch`.
+- `3f4c55d0` — `soc/UniXNU-ums512-common/dts/ums512.dtsi` corrected against live `/proc/device-tree` bytes (PSCI 0.2 only, no `/timer` clock-frequency, GIC 2/2 cells + maintenance PPI 9 + standard `phandle`, UART `sprd,ums518-uart` first).
+- `f09d4fa1` — `dts/realme-c21y-rmx3261.dts` rebuilt (was a 681-byte stub with **no** `device_type = "memory"` node, which the ADT generator hard-rejects): one contiguous DRAM range `0x80000000`/`0xfffff000`, the 17 live reserved-memory regions, `sprd,ums512`-only compatible, `stdout-path`.
+- `3614a701` — `[payload.adt] chip_id = "0x8015"` (mandatory: `devicetree.py:313` reads it whenever `--unique-chip-id` is passed); profile-derived OS identity, not a Unisoc hardware ID.
+- Builds #139 (head `3f4c55d0`) and #140 (head `f09d4fa1`) both **passed step 15 `Compile C21Y device tree`**, so `dtc` accepts the new DTS and DTSI. That is a syntax/cell-count proof only, not an ADT or hardware proof.
 
-The patch has been rewritten locally with hunks `@@ -33,7 +33,9 @@` and `@@ -775,9 +777,11 @@`, verified byte-for-byte against the CI-pinned file, and is ready to commit. All 60 hunks of the 12 OS-series patches were replayed against the pinned tree; this was the only genuine mismatch.
+The earlier root cause, kept for the record (docs/RESEARCH_LOG.md R17): the patch's second hunk was authored for a different `start.s`. It declared `@@ -783,10 +785,13 @@` and closed with `#if HAS_CLUSTER && !NO_CPU_OVRD`; the pinned release `xnu-8796.121.2` / commit `c54f35ca7679` has `#endif // APPLE_ARM64_ARCH_FAMILY` at line 775, the MIDR block at 777-780, and `#if HAS_CLUSTER` (no `&& !NO_CPU_OVRD`) at 783. The same two defects existed in upstream `zus12873/UniXNU:patches/xnu/apple-only-cpu-tunables.patch`.
+
+The patch now carries hunks `@@ -33,7 +33,9 @@` and `@@ -775,9 +777,11 @@`, verified byte-for-byte against the CI-pinned file. All 60 hunks of the 12 OS-series patches were replayed against the pinned tree; this was the only genuine mismatch.
 
 Secondary finding: `osfmk/arm64/tunables/tunables.s` and the `APPLY_TUNABLES` macro do **not** exist in `xnu-8796.121.2` nor `xnu-10063.141.1`, and `APPLE_ARM64_ARCH_FAMILY` is undefined for this board, so the guard added by the patch is what keeps assemble working. The patch is mandatory, not cosmetic.
 
@@ -27,7 +28,7 @@ Secondary finding: `osfmk/arm64/tunables/tunables.s` and the `APPLY_TUNABLES` ma
 | Branch HEAD at Build #126 | `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge of PR #2) |
 | Docs commits after #126 | `355ac68429`, `632d60beb1`, `425233e627` — all `[skip ci]`, no new run |
 | PR | #2, `tmp/c21y-unifdef-fix` -> `port/realme-c21y-rmx3261`, merged |
-| Latest workflow run | #137 (`45514291870`, head `0a22314e`) — patch still wrong, superseded by the fix in §0 |
+| Latest workflow run | #140 (`f09d4fa1`, DTS rebuild) and #139 (`3f4c55d0`, DTSI fix) — both passed step 15 `Compile C21Y device tree`; #138 (`0c12f50d`) is the patch-fix kernel run, step 16 at the time of writing |
 | Build #127 | `45387172638`, cancelled (docs-only `progres.md` push) |
 | Previous failure | Build #124, step 17 `Build native XNU kernel`, `Parse failure` (unifdef 2.10) |
 | Local snapshot | `C:\Users\Randika Aryasatya\Documents\Default Project\unixnu-eebbk-a2_x2-ums512-8d914b2f3dd35cefd09e123b67ea7a41e51864b4` |

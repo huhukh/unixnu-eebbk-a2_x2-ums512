@@ -237,6 +237,9 @@ mengarang nilai lain justru tidak berdasar.
   sukses, langkah 1-15 job Linux sukses (termasuk kompilasi DTS), langkah 16
   (`Build Linux XNU toolchain`) sedang jalan. Langkah 17 (`Build native XNU
   kernel`) belum mulai, jadi klaim "link berhasil" belum boleh dibuat.
-- Perubahan DTS/`board.toml` sesi ini belum di-commit/di-push; belum divalidasi
-  `dtc` (di lokal tidak ada `dtc`, `git`, `python`). Validasi DTS akan terjadi
-  di langkah 15 run berikutnya.
+- Perubahan DTS/`board.toml` sesi ini sudah di-commit dan di-push:
+  `3f4c55d0` (dtsi), `f09d4fa1` (board DTS), `3614a701` (chip_id + docs),
+  `1635c69b` (docs, `[skip ci]`).
+- **Build #139 dan #140 sama-sama lolos langkah 15 `Compile C21Y device tree`**,
+  jadi `dtc` menerima DTS/DTSI baru (sintaks + jumlah cell). Itu bukan bukti
+  ADT, bukan bukti handoff, bukan bukti hardware.
