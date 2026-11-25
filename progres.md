@@ -1,11 +1,17 @@
 # Progres Port XNU — Realme C21Y (RMX3261 / UMS512 T610)
 
 > File ini di-update tiap ada info/progres baru. Ringkas saja.
-> Terakhir update: 2026-11-24 (UTC).
+> Terakhir update: 2026-11-25 (UTC).
 
 ## Status Sekarang
 
-- **Build #126** (`45385291507`) — **SELESAI: GAGAL di step 17** (link), bukan lagi `Parse failure`
+- **Build #142** (`45542624841`, head `4b3a42e3`) — **GAGAL di step 17**, tapi ini pertama kalinya kompilasi XNU asli jalan (3m16s).
+  - Step 1–16 sukses; toolchain 1h45m.
+  - Error compiler pertama: `osfmk/arm/pmap/pmap.h:445:7: error: duplicate member 'reserved10'` (deklarasi sebelumnya di baris 422).
+  - Penyebab: xnu-8796 punya dua field `reserved10` di branch `#else` `CONFIG_ROSETTA` dan `HAS_APPLE_PAC`. C21Y tanpa PAC → dua branch aktif. Bukan salah config fragment.
+  - Fix: `patches/xnu/8796-pmap-no-pac-reserved10.patch` (rename field slot PAC), hunk tervalidasi offline terhadap `c54f35ca7679`; belum di-CI.
+  - `kernel.macho` masih belum ada. Lihat `docs/RESEARCH_LOG.md` R20.
+- Build #126 (`45385291507`) — **GAGAL di step 17** (link), bukan lagi `Parse failure`
   - Commit: `100a64ccee1d153b2baa7432a47a2b5877f09ed6` (merge PR #2)
   - EDK2 job: **sukses**
   - XNU step 1–16: **sukses** (termasuk step 13 patch, 15 DTS, 16 toolchain)
@@ -16,12 +22,7 @@
   - Artifact `realme-c21y-build-check`: 71.555.458 byte, sha256 `f9380b35...`, isinya log/build, bukan kernel
 - Build #127 (redundan, commit progres.md) sudah **dibatalkan**.
 - **Fix link sudah di-push:** `patches/xnu/8796-arm64-platform-sleep-hook.patch` (definisi simbol hook di `osfmk/arm64/cpu.c`) + entri `patches/xnu/series`, commit `5c39de471823b72081f5afc6e1490ca3ccf199ff`.
-- **Build #128** (`45413693437`) — **SEDANG BERJALAN**
-  - EDK2 job: **sukses** (1m 44s)
-  - XNU: step 1–15 **sukses** (patch, config, DTS lolos)
-  - Step 16 "Build Linux XNU toolchain": jalan
-  - Step 17 "Build native XNU kernel": **belum** — ini penentu apakah fix link cukup
-  - Artifact XNU belum ada (baru `realme-c21y-edk2-scaffold` 68.9 KB)
+- Build #128 (`45413693437`) — **GAGAL** karena patch sleep-hook tanpa newline akhir (R15); sudah diperbaiki di `c7c6de6`.
 
 ## Info Hardware Baru (dari HP via ADB, read-only, 2026-11-24)
 
