@@ -20,9 +20,9 @@ Source: GitHub Actions REST API for `huhukh/unixnu-eebbk-a2_x2-ums512`, branch `
 | #135 | `45473909907` | `fbb71605` | `os/ios-16.5: remove all arch: patches (duplicates from soc profile)` | `failure` (step 17 `apple-only-cpu-tunables.patch`) |
 | #136 | `45490266645` | `e189b2d9` | `os/ios-16.5: fix apple-only-cpu-tunables.patch line numbers` | `failure` (step 17 same patch, still wrong context) |
 | #137 | `45514291870` | `0a22314e` | `fix: align CPU tunables patch with XNU 8796 source` | `failure` (step 17 same patch; hunks authored against a different `start.s`) |
-| #138 | `45525087213` | `0c12f50d` | `xnu: fix apple-only-cpu-tunables hunks against xnu-8796.121.2` | in progress — EDK2 job success; Linux steps 1-15 success (step 15 compiled the then-current DTS), step 16 toolchain running |
-| #139 | (see runs API) | `3f4c55d0` | `dts: fix UMS512 GIC, PSCI, timer and UART against live DT` | step 15 `Compile C21Y device tree` success — `dtc` accepts the corrected DTSI |
-| #140 | (see runs API) | `f09d4fa1` | `dts: rebuild C21Y board tree from live /proc/device-tree bytes` | step 15 success — `dtc` accepts the rebuilt board DTS (memory node + 17 reserved regions) |
+| #138 | `45525087213` | `0c12f50d` | `xnu: fix apple-only-cpu-tunables hunks against xnu-8796.121.2` | `failure` — toolchain 105 min success, step 17 failed in 2 s on `start.s:33`; resolved patch_series still had `arch` first (R18) |
+| #139 | `45528302149` | `3f4c55d0` | `dts: fix UMS512 GIC, PSCI, timer and UART against live DT` | `failure` — step 15 dtc pass, step 17 same arch-patch failure |
+| #140 | `45528387275` | `f09d4fa1` | `dts: rebuild C21Y board tree from live /proc/device-tree bytes` | step 15 dtc pass; step 17 expected to repeat R18 (same pre-fix board.toml) |
 
 ## Build #136 detail (measured)
 
@@ -108,6 +108,19 @@ The `1h 15m` toolchain step dominates every iteration. Any change that only affe
 | Observed failure text | `unixnu: board.toml has no [kernel.prelink]` |
 | Root cause | The build harness checks for a `[kernel.prelink]` section in `board.toml` before prelinking components (`DarwinBoot`, `XnuPrelink`), which was missing. See `RESEARCH_LOG.md` R16 |
 | Fix | Added `[kernel.prelink]` to `board.toml`, committed and pushed to trigger Build #130 |
+
+## Build #138 detail — TOML scope hid the board patch_series (R18)
+
+The run summary's `status.json` is the decisive evidence. It reports:
+
+```
+kernel.patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series",
+                       "os:patches/xnu/series", "device:patches/xnu/series"]
+kernel.prelink.patch_series = ["soc:patches/xnu/series", "os:patches/xnu/series",
+                               "device:patches/xnu/series"]
+```
+
+At head `0c12f50d`, `board.toml` opened `[kernel.prelink]` before the three arrays; TOML assigned them to the nested table. The board therefore never overrode the arch profile's `patch_series`, and CI applied the xnu-10063-era arch patch before the fixed OS patch. The fixed OS patch (`sha256` of blob `f94c73d2`, 572 B) replays against `c54f35ca7679` with zero mismatches. Commit `3614a701` moved `[kernel.prelink]` to the end of the file; no run has used that layout yet.
 
 ## Success criteria for the next run
 
