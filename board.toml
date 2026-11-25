@@ -43,7 +43,7 @@ archives = [
   "component:ArmCpu",
   "component:SoftwareAES",
   "build-software-aes-bindings.py",
-  "build-mockfs-fixture.py",
+  # MockFS is an offline test-root fixture, not required for the native C21Y kernel.
   "build-libpthread-kernel.py"
 ]
 
