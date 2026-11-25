@@ -1,21 +1,103 @@
 /*
- * Realme C21Y RMX3261 / RMX3263 - experimental UniXNU board description.
+ * Realme C21Y RMX3261 / RMX3263 - UniXNU board description.
  * SoC family: Unisoc UMS512 / T610 (SharkL5Pro).
  *
- * Conservative host-build DTS skeleton. It deliberately does not invent
- * DRAM banks, reserved-memory ranges, UART register nodes, eMMC, display,
- * touch, PMIC, Wi-Fi or GPU wiring. Import these from the exact stock C21Y
- * DTB before using this tree for a hardware boot.
+ * Every value marked "live" was read read-only from the running stock
+ * kernel's DT (/proc/device-tree) on serial 1804093810BA06J3 and is
+ * recorded in docs/HARDWARE_EVIDENCE.md. Values not yet proven are not
+ * invented here: display, touch, PMIC, Wi-Fi, GPU and storage stay out
+ * until their exact stock wiring is captured.
  */
 /dts-v1/;
 /include/ "ums512.dtsi"
 
 / {
     model = "Realme C21Y RMX3261";
-    /* Board ID confirmed by the stock DTBO overlay and device hardware ID. */
-    compatible = "sprd,S19610AA1", "sprd,ums512";
+    /* live: /compatible = "sprd,ums512" only. S19610AA1 is the bootloader
+     * hardware-ID string in cmdline, not a DT compatible. */
+    compatible = "sprd,ums512";
 
     chosen {
+        /* live: /chosen/stdout-path = "/soc/ap-apb/serial@70100000". The port
+         * has no ap-apb bus node yet, so the same UART is addressed as
+         * /soc/serial@70100000 — the path our own dtsi defines. */
+        stdout-path = "/soc/serial@70100000";
         bootargs = "console=ttyS1,115200n8";
+    };
+
+    /*
+     * live: /memory reg = <0x0 0x80000000 0x0 0xfffff000>
+     * One contiguous DRAM range; the ADT generator requires exactly one.
+     * The 0x81ff0000 rebootescrow hole is carved out by reserved-memory,
+     * not by splitting this node.
+     */
+    memory@80000000 {
+        device_type = "memory";
+        reg = <0 0x80000000 0 0xfffff000>;
+    };
+
+    /*
+     * live: /reserved-memory children and their reg bytes. Listed so the
+     * firmware tree and the ADT never hand TEE, modem, DSP, ramoops or the
+     * logobuffer to the kernel as free memory.
+     */
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        ddrbist: ddrbist-mem@80000000 {
+            reg = <0 0x80000000 0 0x1000>;
+        };
+        rebootescrow: rebootescrow@81ff0000 {
+            no-map;
+            reg = <0 0x81ff0000 0 0x10000>;
+        };
+        debug844c: debug-mem@844c0000 {
+            reg = <0 0x844c0000 0 0x4000>;
+        };
+        audio: audio-mem@87500000 {
+            reg = <0 0x87500000 0 0x300000>;
+        };
+        sipc: sipc-mem@87800000 {
+            reg = <0 0x87800000 0 0x800000>;
+        };
+        spddr: sp-ddr-mem@88000000 {
+            reg = <0 0x88000000 0 0x300000>;
+        };
+        audiodsp: audiodsp-mem@89000000 {
+            reg = <0 0x89000000 0 0x600000>;
+        };
+        cp: cp-mem@89600000 {
+            reg = <0 0x89600000 0 0x4900000>;
+        };
+        sml: sml-mem@94000000 {
+            reg = <0 0x94000000 0 0x40000>;
+        };
+        /* live: base 0x94060000, size 0x4fa0000 (NOT the older 0x94040000). */
+        tos: tos-mem@94060000 {
+            reg = <0 0x94060000 0 0x4fa0000>;
+        };
+        logobuffer: logobuffer@9e000000 {
+            reg = <0 0x9e000000 0 0x9e4000>;
+        };
+        faceid: faceid-mem@efaae000 {
+            reg = <0 0xefaae000 0 0x500000>;
+        };
+        framebuffer_mem: framebuffer-mem@fd708000 {
+            reg = <0 0xfd708000 0 0x1e5a000>;
+        };
+        writeback: writeback-mem@ff562000 {
+            reg = <0 0xff562000 0 0xa1e000>;
+        };
+        ramoops: ramoops@fff80000 {
+            reg = <0 0xfff80000 0 0x40000>;
+            record-size = <0x8000>;
+            console-size = <0x8000>;
+            pmsg-size = <0x8000>;
+        };
+        debug: debug-mem@100000000 {
+            reg = <0x1 0x0 0 0x1000>;
+        };
     };
 };
