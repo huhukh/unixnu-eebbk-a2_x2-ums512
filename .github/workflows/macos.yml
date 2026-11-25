@@ -121,6 +121,19 @@ jobs:
               tree.write_text(text.replace(anchor, patched, 1))
           elif 'AAPL,phandle' not in text:
               raise SystemExit('devicetree.py: phandle anchor not found')
+
+          # macos-15 / Xcode 26.3 ships Clang 17, which rejects
+          # -Wno-unnecessary-virtual-specifier under -Werror (run #10).
+          # Downgrade only the unknown-option diagnostic; keep the real
+          # suppression on newer clang.
+          arm = Path('UniXNU/scripts/build-arm-driver.py')
+          arm_text = arm.read_text()
+          anchor = "'-Wno-unnecessary-virtual-specifier', '-I'"
+          patched = "'-Wno-unnecessary-virtual-specifier', '-Wno-error=unknown-warning-option', '-I'"
+          if anchor in arm_text:
+              arm.write_text(arm_text.replace(anchor, patched, 1))
+          elif '-Wno-error=unknown-warning-option' not in arm_text:
+              raise SystemExit('build-arm-driver.py: warning anchor not found')
           print('board components installed')
           PY
           git -C UniXNU status --short
