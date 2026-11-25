@@ -21,6 +21,8 @@ Source: GitHub Actions REST API for `huhukh/unixnu-eebbk-a2_x2-ums512`, branch `
 | #136 | `45490266645` | `e189b2d9` | `os/ios-16.5: fix apple-only-cpu-tunables.patch line numbers` | `failure` (step 17 same patch, still wrong context) |
 | #137 | `45514291870` | `0a22314e` | `fix: align CPU tunables patch with XNU 8796 source` | `failure` (step 17 same patch; hunks authored against a different `start.s`) |
 | #138 | `45525087213` | `0c12f50d` | `xnu: fix apple-only-cpu-tunables hunks against xnu-8796.121.2` | in progress — EDK2 job success; Linux steps 1-15 success (step 15 compiled the then-current DTS), step 16 toolchain running |
+| #139 | (see runs API) | `3f4c55d0` | `dts: fix UMS512 GIC, PSCI, timer and UART against live DT` | step 15 `Compile C21Y device tree` success — `dtc` accepts the corrected DTSI |
+| #140 | (see runs API) | `f09d4fa1` | `dts: rebuild C21Y board tree from live /proc/device-tree bytes` | step 15 success — `dtc` accepts the rebuilt board DTS (memory node + 17 reserved regions) |
 
 ## Build #136 detail (measured)
 

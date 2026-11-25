@@ -354,6 +354,15 @@ one that matters for the ADT and is what the port now uses.
 8. `tos-mem` was `0x94040000`/`0x4fa0000` in the older notes; live is
    `0x94060000`/`0x4fa0000`. Fixed.
 
+### 8.5 Validation status
+
+`dtc` accepted both files in CI: Build #139 (head `3f4c55d0`, corrected DTSI) and
+Build #140 (head `f09d4fa1`, rebuilt board DTS) both passed the
+`Compile C21Y device tree` step, which compiles, re-reads the DTB and greps the
+model string. That proves syntax and cell counts only. It does **not** prove
+ADT generation (`unixnu build payload` has not been run), firmware handoff, or
+any hardware behaviour.
+
 Still open in the DTS (deliberately not guessed):
 
 - UART `clocks` phandles: `clock-names` is proven, but the UMS512 clock
