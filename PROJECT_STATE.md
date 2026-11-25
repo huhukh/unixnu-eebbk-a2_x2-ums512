@@ -119,7 +119,7 @@ in `osfmk/arm64/cpu.c`, and is added to `patches/xnu/series`. The pre-image blob
 
 ## 5. Immediate next action
 
-Commit `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch`, its OS `series` entry, and these records to `port/realme-c21y-rmx3261` **without** `[skip ci]`, so CI runs again. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. The parallel macOS payload run `45573253682` is also active; do not flash/boot until both produce verified artifacts.
+Commit `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch`, its OS `series` entry, and these records to `port/realme-c21y-rmx3261` **without** `[skip ci]`, so CI runs again. Success requires the `Linux - C21Y XNU 8796 build and DTS` job to finish `success` with a non-empty `kernel.macho` whose SHA-256 and Mach-O ARM64 header are verified. Linux rerun #144 (`45584005675`, head `dc6ddffa`) is active. macOS payload run #1 (`45573253682`, head `9ba7279a`) failed at `defconfig + status` because the device OS profile was never installed (R22); `macos.yml` now runs `scripts/install-os-profile.sh`, and run #2 (`45584727801`, head `9e3c883d`) is active. Do not flash/boot until both produce verified artifacts.
 
 ## 6. Checkpoint commands
 
