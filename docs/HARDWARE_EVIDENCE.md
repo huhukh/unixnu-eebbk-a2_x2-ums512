@@ -365,9 +365,10 @@ any hardware behaviour.
 
 Still open in the DTS (deliberately not guessed):
 
-- UART `clocks` phandles: `clock-names` is proven, but the UMS512 clock
-  controller node is not described, and `devicetree.py` rejects an unresolved
-  `clocks` reference. The property is left out rather than faked.
+- UART `clocks` phandles: `clock-names` is proven; see §9.4 for the live clock
+  controllers. Their phandles/specifiers have not been mapped to the UART's
+  `enable`/`uart`/`source` clocks, and `devicetree.py` rejects an unresolved
+  `clocks` reference. The property stays out rather than being faked.
 - GIC `v2m@0` (ITS) is proven to exist but has no consumer yet, so it is not
   described.
 - `/cpus` `capacity-dmips-mhz` (`0x400` = 1024 on the A75 cluster) is proven
@@ -396,3 +397,89 @@ Still open in the DTS (deliberately not guessed):
 profile already carries (`profile.toml [ipsw] chip_id = 32789`). It is an
 OS-identity value for the D22AP kernel being booted, not a Unisoc hardware ID;
 no vendor source documents a UMS512 `chip-id` DT property.
+
+## 9. GPU / touchscreen / battery / clocks — live capture (2026-11-25)
+
+Method: read-only ADB on serial `1804093810BA06J3` as `su -c` solely to read
+`/proc/device-tree` with `od -An -tx1`; plus `getevent -il`. No write, no
+reboot, no flash. These are stock-kernel facts for later driver/DTS work;
+none is yet implemented in the port DTS, and none is a boot claim.
+
+### 9.1 GPU (`/soc/mm/gpu@60000000`)
+
+| Property | Live bytes | Decoded |
+| --- | --- | --- |
+| `compatible` | `737072642c6d616c692d676f6e64756c00` | `"sprd,mali-gondul"` |
+| `reg` | `00000000 60000000 00000000 00100000` | MMIO `0x60000000`, size `0x100000` |
+| `interrupt-names` | `4a4f4200 4d4d5500 47505500` | `"JOB"`, `"MMU"`, `"GPU"` |
+| `interrupts` | `<0 0x3c 4>` × 3 | three SPI 60 (irq 92), level-high |
+| `phandle` | `000000fd` | 253 |
+| `clocks` | 9 pairs: `<4 8> <0x1b 0> <0x1b 2> <0x1b 4> <7 2> <7 8> <7 0x16> <7 1> <7 0x1d>` | phandle + index; specifier mapping not resolved |
+| `gpu-supply` | `00000016` | phandle 22 |
+| `system-coherency` | `0000001f` | phandle 31 |
+
+`operating-points` and the `sprd,dvfs-*` tables exist but are not copied here:
+they are Linux DVFS data, not needed for XNU bring-up and too large to
+transcribe safely.
+
+### 9.2 Touchscreen (`/soc/ap-apb/spi@70a00000/touchscreen@0`)
+
+Live input device from `getevent -il`: `event0`, name `"himax-touchscreen"`,
+`INPUT_PROP_DIRECT`, 10 slots, `ABS_MT_POSITION_X` 0–719, `ABS_MT_POSITION_Y`
+0–1599. So the active compatible is the first one, `himax,hxcommon`.
+
+| Property | Live bytes | Decoded |
+| --- | --- | --- |
+| SPI `reg` | `00000000 70a00000 00000000 00001000` | controller MMIO `0x70a00000`, size `0x1000` |
+| SPI `compatible` | `sprd,sc9860-spi`, `sprd,sharkl5pro-spi` | vendor SPI binding |
+| SPI `interrupts` | `<0 7 4>` | SPI 7, level-high |
+| SPI `phandle` | `00000107` | 263 |
+| child `compatible` | `himax,hxcommon`, `chipone-tddi`, `tchip,ilitek`, `focal,focaltech` | four candidates; `himax` is active |
+| child `reg` | `00000000` | chip select 0 |
+| child `interrupts` | `00000090 00002000` | GPIO specifier; `interrupt-parent = <0xd2>` |
+| `spi-max-frequency` | `00989680` | 10,000,000 Hz |
+| `status` | `okay` | enabled |
+| `himax,irq-gpio` | `<0xd2 0x90 0>` | GPIO chip phandle 210, line 144 |
+| `himax,rst-gpio` | `<0xd2 0x91 0>` | GPIO chip phandle 210, line 145 |
+| `himax,display-coords` / `touch,panel-coords` | `<0 0 720 1600>` | 720×1600 |
+| `focaltech,display-coords` | `<0 0 719 1599>` | max coordinate values |
+| `chipone,x-res` / `y-res` | `000002d0` / `00000640` | 720 / 1600 |
+
+### 9.3 Battery and charger
+
+| Property | Live bytes | Decoded |
+| --- | --- | --- |
+| `/battery/compatible`, `/battery1/compatible`, `/non_standard_batt/compatible` | `simple-battery` | all three are `simple-battery` descriptors |
+| `/battery/brand` | `realme-lwn-4V45-5000mAh` | LWN cell |
+| `/battery1/brand` | `realme-atl-4V45-5000mAh` | ATL cell |
+| `charge-full-design-microamp-hours` | `004a5740` | 4,872,000 µAh = 4872 mAh |
+| `voltage-min-design-microvolt` | `0034bc00` | 3,456,000 µV |
+| `constant_charge_voltage_max_microvolt` | `0043a080` | 4,429,440 µV |
+| `/battery/phandle`, `/battery1/phandle`, `/non_standard_batt/phandle` | `0x1a8`, `0x1a9`, `0x1aa` | exact targets of `monitored-battery = <0x1a8 0x1a9 0x1aa>` |
+| `/charger-manager/compatible` | `charger-manager` | Linux charger-manager binding |
+| `cm-chargers` | `bq2560x_charger` | one charger, also `cm-num-chargers = <1>` |
+| `cm-fuel-gauge` | `sc27xx-fgu` | fuel gauge name |
+| `/chg-sensor/compatible` | `generic-adc-thermal` | charger temperature sensor, no `interrupts` |
+
+No `reg`/MMIO address belongs to the `simple-battery` nodes. A `bq2560x_charger`
+or `sc27xx-fgu` *node* was not found under `/proc/device-tree`; only the names
+above are proven. Do not invent I²C addresses for them.
+
+`/pmu` is unrelated to battery: `compatible = "arm,armv8-pmuv3"` with
+`interrupts = <0 0x70 4>` … `<0 0x77 4>` (SPI 112–119).
+
+### 9.4 Clock controllers — correction to §8.5
+
+Live `/soc` does contain clock-controller nodes, so the old claim "no proven
+clock-controller node" is too broad:
+
+| Node | phandle | compatible |
+| --- | --- | --- |
+| `clock-controller@20200000` | `0x1d` | `sprd,sharkl5pro-ap-clk` |
+| `clock-controller@32080000` | `0x46` | `sprd,sharkl5pro-aonapb-clk` |
+| `clock-controller@62100000` | `0x06` | `sprd,sharkl5pro-mm-clk` |
+| `clock-controller@62200000` | `0x05` | `sprd,sharkl5pro-mm-gate-clk` |
+
+This does **not** yet resolve the UART `clocks` specifiers: the phandles used
+by the UART (`4`, `8`, …) have not been mapped to a proven clock node or
+`#clock-cells` binding. That DTS property stays omitted until mapped.
