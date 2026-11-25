@@ -25,6 +25,7 @@ Source: GitHub Actions REST API for `huhukh/unixnu-eebbk-a2_x2-ums512`, branch `
 | #140 | `45528387275` | `f09d4fa1` | `dts: rebuild C21Y board tree from live /proc/device-tree bytes` | `failure` — step 15 dtc pass, step 17 confirmed identical `start.s:33` arch-patch failure (R18) |
 | #141 | `45541568640` | `040b6898` | `docs: record R18 gate and trigger fresh kernel build` | `failure` — step 11 `Resolve C21Y defconfig`: `board.toml: Invalid statement (at line 1, column 1)` (UTF-8 BOM, R19) |
 | #142 | `45542624841` | `4b3a42e3` | `fix: remove UTF-8 BOM from board.toml` | `failure` — first run past R18/R19; step 17 compile error: duplicate `reserved10` in xnu-8796 `pmap.h` (R20) |
+| #143 | `45565371465` | `5d6b6e3` | `xnu: fix duplicate pmap reserved10 on non-PAC C21Y` | `failure` — R20 fix confirmed, step 17 now fails on missing `arm64/ppl/sart.h` include (R21) |
 
 ## Build #136 detail (measured)
 
@@ -137,6 +138,20 @@ At head `0c12f50d`, `board.toml` opened `[kernel.prelink]` before the three arra
 | `kernel.macho` | still not produced; no link reached |
 
 The board fix is `8796-pmap-no-pac-reserved10.patch` (renames the PAC-slot padding field). It was validated against the pinned source before commit; see `RESEARCH_LOG.md` R20.
+
+## Build #143 detail — first build with the R20 fix (R21)
+
+| Field | Value |
+| --- | --- |
+| Run / job | `45565371465` / `139038754401`, head `5d6b6e3` |
+| Steps 1–16 | all `success`; toolchain 55m 02s |
+| Step 17 | `failure` after 2m 05s; R20 duplicate-field error is gone |
+| First compiler error | `fatal error: 'arm64/ppl/sart.h' file not found`, from `osfmk/arm/pmap/pmap.c:87` |
+| Root cause | xnu-8796 `pmap.c` includes/guards nothing around Apple PPL SART/UAT; BCM2837 has no `XNU_MONITOR_ANS2_SART`/`XNU_MONITOR_UAT_PPL`; the OS series omitted the 8796 port of `non-apple-iommu-bootstrap.patch` |
+| Full log | Artifact `realme-c21y-build-check`, id `15002168770`, 44,770,923 bytes, digest `sha256:5f3f171493d70f25946fd8f6f9a1f8d125a8eb0e5041f30deae2d9053e3b3016`; `kernel-bootstrap.log` 558,857,629 bytes |
+| `kernel.macho` | still not produced; no link reached |
+
+The fix is `8796-non-apple-iommu-bootstrap.patch`, validated byte-for-byte against `c54f35ca7679` before commit; see `RESEARCH_LOG.md` R21.
 
 ## Success criteria for the next run
 

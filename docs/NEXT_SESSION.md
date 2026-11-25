@@ -5,17 +5,18 @@
 Read in this order:
 
 1. `PROJECT_STATE.md` §0 (current gate) and §1
-2. `docs/RESEARCH_LOG.md` **R20** (active root cause), then R19/R18 (closed gates), R17 and R9–R13
-3. `docs/BUILD_HISTORY.md` Build #142 detail and the run table
+2. `docs/RESEARCH_LOG.md` **R21** (active root cause), then R20/R19/R18 (closed gates), R17 and R9–R13
+3. `docs/BUILD_HISTORY.md` Build #143 detail and the run table
 4. `docs/HARDWARE_EVIDENCE.md` §2.1, §3, §4.1, §8
 5. `board.toml` `[kernel]` and the three `patch_series` files
 
 Do not re-investigate the unifdef failure (closed, R9–R12), the
 `arm64_platform_sleep_hook` link failure (closed, R13), or the R17 patch context
 (fixed in `0c12f50d` and replayed with zero mismatches), or the BOM gate (R19).
-**Immediate action:** commit the R20 patch and trigger CI without `[skip ci]`.
-Build #142 reached real XNU compilation and died on xnu-8796's two `reserved10`
-fields; the fix is validated offline but not yet in CI.
+**Immediate action:** commit the R21 patch and trigger CI without `[skip ci]`.
+Build #143 confirmed R20 fixed and died on xnu-8796's unguarded Apple PPL
+SART/UAT include/calls; the fix is validated offline but not yet in CI. The
+parallel macOS payload run `45573253682` is also active.
 
 ## 1. Current state
 
@@ -24,17 +25,18 @@ fields; the fix is validated offline but not yet in CI.
 | Branch | `port/realme-c21y-rmx3261` |
 | Build #136 | run `45490266645`, head `e189b2d9`, `failure` — step 17, 2 s after start |
 | Build #137 | run `45514291870`, head `0a22314e`, same patch defect; do not wait on it |
-| Build #142 | run `45542624841`, head `4b3a42e3`, steps 1–16 success, step 17 compile failure `pmap.h:445 duplicate member 'reserved10'` (R20) |
+| Build #143 | run `45565371465`, head `5d6b6e3`, steps 1–16 success, step 17 compile failure `'arm64/ppl/sart.h' file not found` (R21); R20 fix confirmed |
 | Failing command | `python3 ./unixnu build kernel --skip-prelink -D <ws> --out <ws>/out` |
 | `kernel.macho` | Never produced. Link stage has never been reached. |
 | Step 16 cost | 1 h 45 m 14 s in #142 (dominates every iteration) |
 
 ## 2. Local delta (ready to commit)
 
-**(a) The R20 XNU patch — new, validated offline, not yet committed:**
+**(a) The R21 XNU patch — new, validated offline, not yet committed:**
 
-- `patches/xnu/8796-pmap-no-pac-reserved10.patch` — rename the PAC-slot padding field `reserved10` → `reserved10_pac` so the two mutually exclusive `#else` branches of xnu-8796 `struct pmap` do not collide on a non-PAC board. 213 bytes, LF, `@@ -442,7 +442,7 @@` replayed byte-for-byte against `c54f35ca7679`.
-- `patches/xnu/series` — adds it after the sleep-hook patch with the evidence note.
+- `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch` — guard the `arm64/ppl/sart.h` / `uat.h` includes and the `sart_bootstrap()` / `uat_bootstrap()` calls in `pmap.c` with `XNU_MONITOR_ANS2_SART` / `XNU_MONITOR_UAT_PPL`. 982 bytes, LF, both hunks replayed byte-for-byte against `c54f35ca7679`.
+- `os-profiles/ios-16.5-20F66/patches/xnu/series` — adds it after `apple-only-cpu-tunables.patch`.
+- R20's `8796-pmap-no-pac-reserved10.patch` is already committed; build #143 proves that error is gone.
 
 **(b) Device-tree / ADT corrections — already committed and validated by `dtc` in #139/#140:**
 

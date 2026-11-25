@@ -376,3 +376,29 @@ unixnu: .../board.toml: Invalid statement (at line 1, column 1)
 - Do **not** define `HAS_APPLE_PAC` or `CONFIG_ROSETTA` to hide this: C21Y hardware has no pointer authentication and no Rosetta, so either would be a false hardware claim.
 - Offline validation: hunk `@@ -442,7 +442,7 @@` replayed against the pinned file with all seven old context lines matching byte-for-byte; seven new lines; patch is 213 bytes, LF-only, ends with `0x0a`.
 - Added to `patches/xnu/series` after the sleep-hook patch. A new CI run is required; no compile or boot claim is made until it produces a non-empty `kernel.macho`.
+
+## R21 — Build #143: missing non-Apple PPL/IOMMU guards in xnu-8796 `pmap.c`
+
+**Evidence (run `45565371465`, head `5d6b6e3`)**
+- Steps 1–16 all succeeded; step 17 failed after 2m 05s. Artifact `realme-c21y-build-check` id `15002168770`, 44,770,923 bytes, digest `sha256:5f3f171493d70f25946fd8f6f9a1f8d125a8eb0e5041f30deae2d9053e3b3016`, downloaded via `nightly.link`; local SHA-256 matched. `kernel-bootstrap.log` is 558,857,629 bytes.
+- First compiler error (log line 2,787,305): `fatal error: 'arm64/ppl/sart.h' file not found`, from `osfmk/arm/pmap/pmap.c:87`. No earlier compiler error in the log; only the same harmless `sysctl`/`sw_vers` lines seen before.
+- Pinned source `c54f35ca7679`: `pmap.c:87` includes `arm64/ppl/sart.h`, line 88 includes `arm64/ppl/uat.h`, and `pmap_bootstrap()` calls `uat_bootstrap()` (line 2186) and `sart_bootstrap()` (line 2192). Neither header exists anywhere in that tree (grep: one match, the include itself).
+- `pexpert/arm64/board_config.h` defines `XNU_MONITOR` only for T6000/T8101/T8103. The BCM2837 config used by this port (lines 90–98) defines no `XNU_MONITOR`, `XNU_MONITOR_ANS2_SART` or `XNU_MONITOR_UAT_PPL`. So the Apple PPL/IOMMU paths are absent hardware, not missing files to invent.
+- UniXNU's arch arm64 series contains `non-apple-iommu-bootstrap.patch`, which adds exactly these four guards. The C21Y OS series for xnu-8796 did not port it (R18 correctly removed the arch series because it targets xnu-10063), so the unguarded 8796 source reached the compiler.
+
+**Fix**
+- New `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-non-apple-iommu-bootstrap.patch`: guards the `sart.h`/`uat.h` includes and the two bootstrap calls with `XNU_MONITOR_ANS2_SART` / `XNU_MONITOR_UAT_PPL`. No stub headers, no macro forced to 1, no invented register or address.
+- Offline validation: both hunks replayed byte-for-byte against the pinned `pmap.c` (`@@ -84,8 +84,12 @@` and `@@ -2183,16 +2187,20 @@`); patch 982 bytes, LF-only, ends `0x0a`. Added after `apple-only-cpu-tunables.patch` in the OS series, before the later `pmap.c` hunk in `zzx-pmap-sync-64bit-pa.patch`.
+- No compile or boot claim until a new CI run produces a non-empty `kernel.macho`.
+
+## R22 — macOS payload run #1: OS profile never installed into the upstream UniXNU checkout
+
+**Evidence (run `45573253682`, head `9ba7279a`, job `139064823493`)**
+- Job failed in 1m 22s at step 9 `defconfig + status`; steps 10–13 (kernel, bindings, bring-up, payload) were skipped. Zero artifacts were produced (`actions/runs/.../artifacts` returned `total_count: 0`), and the `macos-logs` upload found no files (annotation: `No files were found with the provided path: kernel.log ...`).
+- Step log (read from the job page): `+ ./unixnu defconfig realme-c21y-rmx3261_defconfig -D .../device` then `unixnu: missing file: .../UniXNU/profiles/os/ios-16.5-20F66/profile.toml`, exit 1.
+- Cause: `macos.yml` clones **upstream** UniXNU and injects only `components/SdhciBlock.toml` plus the `AAPL,phandle` fix. It never runs `scripts/install-os-profile.sh`, which the Linux `build.yml` runs before defconfig. `profiles.resolve_path()` looks up `UniXNU/profiles/os/<name>/profile.toml`, so the device-owned OS profile was invisible to the macOS job.
+
+**Fix**
+- `.github/workflows/macos.yml`: new step `Install iOS 16.5 OS profile` immediately after `Clone UniXNU core`, calling `bash device/scripts/install-os-profile.sh UniXNU` and asserting `UniXNU/profiles/os/ios-16.5-20F66/profile.toml` exists. Mirrors the Linux workflow exactly; no new files, no guessed paths.
+- Note for the next gate: step `Apply BBK A2 bring-up kernel patches` uses `scripts/patch-bringup-kernel.py`; its `0x9e000000` target is the live-tree `logobuffer@9e000000` reservation (`HARDWARE_EVIDENCE.md` §9), not a guessed address. It still has to be re-verified on an actual xnu-8796 `kernel.macho` — pattern misses must be root-caused, not ignored.
+- No payload/boot claim until the re-dispatched run produces a verified `kernel.macho` and `payload.img`.
