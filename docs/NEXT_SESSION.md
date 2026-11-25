@@ -21,15 +21,25 @@ Do not re-investigate the unifdef failure (closed, R9–R12) or the
 | Branch | `port/realme-c21y-rmx3261` |
 | Build #136 | run `45490266645`, head `e189b2d9`, `failure` — step 17, 2 s after start |
 | Build #137 | run `45514291870`, head `0a22314e`, same patch defect; do not wait on it |
+| Build #138 | run `45525087213`, head `0c12f50d` (patched), EDK2 job success, Linux steps 1-15 success, step 16 in progress — this is the run that proves or disproves the `apple-only-cpu-tunables` fix |
 | Failing command | `python3 ./unixnu build kernel --skip-prelink -D <ws> --out <ws>/out` |
-| Failing patcher | `== kernel: patch apple-only-cpu-tunables.patch` |
 | `kernel.macho` | Never produced. The link stage has never been reached. |
 | Step 16 cost | `Build Linux XNU toolchain` = 1 h 15 m 33 s of the 1 h 18 m 29 s job |
 
-## 2. Local delta (ready to commit, unverified in CI)
+## 2. Local delta (ready to commit)
 
-- `os-profiles/ios-16.5-20F66/patches/xnu-8796/apple-only-cpu-tunables.patch` — rewritten. Hunks `@@ -33,7 +33,9 @@` and `@@ -775,9 +777,11 @@`. `index` line removed. 572 bytes, LF only, trailing newline present, leading space preserved on tab-indented context lines.
-- `PROJECT_STATE.md`, `docs/RESEARCH_LOG.md` (R17), `docs/BUILD_HISTORY.md` (build table + #136 detail), `docs/HARDWARE_EVIDENCE.md` (§4.1, safety ledger), `docs/NEXT_SESSION.md`, `progres.md` — updated.
+Two independent sets of changes are sitting uncommitted:
+
+**(a) The `apple-only-cpu-tunables.patch` fix — already committed as `0c12f50d` and under test in #138.**
+
+**(b) Device-tree / ADT corrections, not yet committed, no CI validation yet:**
+
+- `dts/realme-c21y-rmx3261.dts` — rewritten (was a 681-byte stub with no memory node). Adds `/memory@80000000 reg = <0 0x80000000 0 0xfffff000>`, the full 17-region `/reserved-memory` from the live tree (`tos-mem` corrected to `0x94060000`/`0x4fa0000`), `compatible = "sprd,ums512"` only, `stdout-path`.
+- `soc/UniXNU-ums512-common/dts/ums512.dtsi` — `psci` reduced to `"arm,psci-0.2"`; invented `/timer` `clock-frequency` removed; GIC `#address-cells`/`#size-cells` = 2, `interrupts = <1 9 4>` added, `AAPL,phandle` → `phandle`; UART compatible order `"sprd,ums518-uart"`, `"sprd,sc9836-uart"`.
+- `board.toml` — `[payload.adt] chip_id = "0x8015"` added (profile-derived, see `docs/HARDWARE_EVIDENCE.md` §8.4; without it `devicetree.py:313` raises `KeyError`).
+- `docs/HARDWARE_EVIDENCE.md` §8, `progres.md` — the byte-level evidence and the 8 proven DTS defects.
+
+Rationale for each value is in `docs/HARDWARE_EVIDENCE.md` §8; nothing was guessed.
 
 Verification already performed offline, against `apple-oss-distributions/xnu` commit `c54f35ca767986246321eb901baf8f5ff7923f6a` (`osfmk/arm64/start.s`, 873 lines, fetched during this session):
 
@@ -52,12 +62,21 @@ Do not fabricate a commit SHA; read it back from the API after committing.
 
 ## 4. Commit and trigger the next run
 
-Commit the single patch file (plus the docs) **without** `[skip ci]`.
+Two separate pushes, in this order:
 
-Recommended message:
+1. **Do not touch anything while #138 runs.** It is the proof run for the patch fix.
+2. When #138 finishes, commit the DTS + `board.toml` + docs delta **without**
+   `[skip ci]`, so the next run's step 15 (`Compile C21Y device tree`) validates
+   the DTS with the real `dtc` — the only `dtc` available in this environment.
+
+Recommended messages:
 
 ```
-xnu: fix apple-only-cpu-tunables hunks against xnu-8796.121.2
+dts: rebuild C21Y board tree from live /proc/device-tree bytes
+```
+
+```
+adt: declare payload.adt chip_id and document live-DT reconciliation
 ```
 
 Then confirm from the API that a new run exists with that head SHA:
@@ -88,6 +107,7 @@ Only then may the state read "compiled ARM64 kernel achieved".
 
 Expected failure classes, in order of likelihood, all still unproven:
 
+- **`dtc` rejects the new DTS** (step 15, fails ~4 min into the Linux job). Classes: duplicate labels, a `reg` whose cell count does not match the parent's `#address-cells`/`#size-cells`, or a phandle that never resolves. This is cheap to iterate: step 15 runs before the 75-minute toolchain step.
 - **Another OS-series patch that only applies with an offset larger than `git apply` tolerates**, or a later patch whose context was built on top of this one. Fix by replaying the hunk against the pinned tree before pushing, as done here.
 - **`APPLY_TUNABLES` or `arm64/tunables/tunables.s` reached anyway.** If `APPLE_ARM64_ARCH_FAMILY` turns out to be defined by the actual build flags, the guard is a no-op and assemble fails on a missing file. Evidence to collect first: the exact `-D` flags in the failing compile line.
 - **A later `weak_import` with no strong definition** — the #126 log listed exactly one symbol, but later objects can add more.
@@ -102,6 +122,9 @@ For each: get the failing step from the jobs API, read the step log, root-cause 
 - Do not set `platform-sleep=1`.
 - Do not "fix" the reported offsets in `clang-uio-stackbuf`, `native-aes-personality` or `zzx-pmap-sync-64bit-pa` — they apply correctly.
 - Do not re-add any `arch:` patch to the OS series; the SOC profile already applies `arch:patches/xnu/series`.
+- Do not add UART `clocks` phandles until a UMS512 clock-controller node with proven register data exists: `devicetree.py` hard-fails on an unresolved reference, and a fake provider is worse than a missing one.
+- Do not split `/memory@80000000` into banks or "restore" the static 2 GiB `0x80000000` size from the old notes: the ADT generator requires one contiguous range and the live tree says `0xfffff000`.
+- Do not write `AAPL,phandle` by hand in the DTS. `dtc` needs the standard `phandle` to resolve `&gic`; the macOS workflow rewrites `phandle` → `AAPL,phandle` when it emits the ADT.
 
 ## 8. Hard restrictions
 

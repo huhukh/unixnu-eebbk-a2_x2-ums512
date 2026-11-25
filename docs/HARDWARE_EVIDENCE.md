@@ -282,3 +282,108 @@ From `/proc/interrupts` (GICv3, 3-cell DT encoding → the printed number is the
 - 2026-11-25: read-only ADB again: `/proc/iomem`, `/proc/config.gz` (pulled with `zcat`), `/proc/timer_list`, `/proc/interrupts`, `/sys/devices/system/clocksource/*`, `/proc/device-tree` listing. No write, no reboot, no flash, no `su` side effects beyond reading.
 - No memory address, register, offset, reservation or config value was inferred from the unifdef investigation.
 - The Build #124 `Parse failure` is a host-tool/source compatibility issue. It says nothing about CPU, GIC, UART, memory or firmware correctness.
+- 2026-11-25 (later session): read-only ADB again on serial `1804093810BA06J3`, only `cat`/`od`/`find`/`ls` under `/proc/device-tree`. No write, no `su` mutation beyond reading, no reboot, no flash.
+
+## 8. Live DT byte capture vs port DTS (2026-11-25)
+
+All bytes below were dumped with `od -An -tx1` from `/proc/device-tree` on the
+running stock kernel. They are the authority for the port DTS; anything in
+`dts/` that disagrees with these bytes is a port defect, not a vendor quirk.
+
+### 8.1 Root, memory, CPUs
+
+| Node/property | Live bytes | Meaning |
+| --- | --- | --- |
+| `/` `#address-cells` | `00000002` | 2 |
+| `/` `#size-cells` | `00000002` | 2 |
+| `/compatible` | `737072642c756d7335313200` | `"sprd,ums512"` only (single string) |
+| `/model` | `Unisoc UMS512 SoC` | vendor model string |
+| `/memory` `reg` | `0000000080000000` `00000000fffff000` | base `0x80000000`, size `0xfffff000` |
+| `/cpus` `#address-cells` / `#size-cells` | `00000002` / `00000000` | 2 / 0 |
+| `/cpus/timebase-frequency` | **absent** | timer frequency is not published here by the vendor tree |
+| `cpu@0…700` `reg` | `0000000000000000` … `0000000000000700` | 8 CPUs, affinity `0x0,0x100,…,0x700` |
+
+Note the stock base DTB static text in
+`docs/C21Y-STOCK-DTB-MEMORY-INSPECTION.md` says `size = 0x80000000`; the tree
+actually handed to the running kernel says `0xfffff000`. The live value is the
+one that matters for the ADT and is what the port now uses.
+
+### 8.2 PSCI, GIC, timer, UART
+
+| Node/property | Live bytes | Meaning |
+| --- | --- | --- |
+| `/psci/compatible` | `61726d2c707363692d302e3200` | `"arm,psci-0.2"` only |
+| `/psci/method` | `smc` | SMC conduit |
+| `cpu@0`,`cpu@600` `enable-method` | `psci` | both clusters |
+| GIC `reg` | `00000000 12000000 00000000 00020000` `00000000 12040000 00000000 100000` | GICD `0x12000000`+`0x20000`, GICR `0x12040000`+`0x100000` |
+| GIC `#address-cells` / `#size-cells` | `00000002` / `00000002` | 2 / 2 |
+| GIC `#interrupt-cells` | `00000003` | 3 |
+| GIC `#redistributor-regions` | `00000001` | 1 |
+| GIC `redistributor-stride` | `0000000000020000` | `0x20000` (2 cells) |
+| GIC `interrupts` | `00000001 00000009 00000004` | maintenance PPI 9, level high |
+| GIC `compatible` | `61726d2c6769632d763300` | `"arm,gic-v3"` |
+| GIC child `v2m@0` | `msi-controller`, `reg = <0 0 0 0x1000>` | GICv3 ITS/MSI frame present |
+| `/timer/compatible` | `61726d2c61726d76382d74696d657200` | `"arm,armv8-timer"` |
+| `/timer/interrupts` | `1 13 4, 1 14 4, 1 11 4, 1 10 4` | secure EL1 phys, non-secure EL1 phys, virt, hyp |
+| `/timer/clock-frequency` | **absent** | must not be invented in the DTS |
+| UART `compatible` | `737072642c756d733531382d7561727400` `737072642c7363393833362d7561727400` | `"sprd,ums518-uart"`, then `"sprd,sc9836-uart"` |
+| UART `reg` | `00000000 70100000 00000000 00000100` | `0x70100000`, size `0x100` |
+| UART `interrupts` | `00000000 00000003 00000004` | SPI 3, level high |
+| UART `clock-names` | `enable\0uart\0source\0` | three clocks |
+
+### 8.3 Port defects this capture proved
+
+1. `psci` claimed `"arm,psci-1.0"` first. The firmware reports 0.2 only.
+   Fixed: single `"arm,psci-0.2"` string.
+2. `/timer` carried an invented `clock-frequency = <26000000>`. Fixed: removed;
+   the proven 26 MHz now lives only in `/cpus/timebase-frequency`, which is
+   where `scripts/unixnu/devicetree.py` reads it (`cpus.scalar(...)`, line 391).
+3. GIC had `#address-cells = <0>`; live is `2`, and `#size-cells` was missing.
+   Fixed to 2/2, matching the 2-cell `reg` and `redistributor-stride`.
+4. GIC had no maintenance interrupt. Fixed: `interrupts = <1 9 4>`.
+5. GIC used a non-standard `AAPL,phandle = <0x1>`. Fixed to standard
+   `phandle = <0x1>` so `dtc` resolves `&gic`; the macOS workflow converts
+   `phandle` → `AAPL,phandle` when it emits the ADT, which is what
+   `IODTGetInterruptController` actually matches.
+6. UART advertised only `"sprd,sc9836-uart"`. Fixed: `"sprd,ums518-uart"` first,
+   `"sprd,sc9836-uart"` second.
+7. The board DTS had **no** `device_type = "memory"` node at all; the ADT
+   generator hard-fails on that (`devicetree.py:302-304`,
+   `ADT handoff requires one contiguous DRAM range`). Fixed with
+   `/memory@80000000 reg = <0 0x80000000 0 0xfffff000>`.
+8. `tos-mem` was `0x94040000`/`0x4fa0000` in the older notes; live is
+   `0x94060000`/`0x4fa0000`. Fixed.
+
+Still open in the DTS (deliberately not guessed):
+
+- UART `clocks` phandles: `clock-names` is proven, but the UMS512 clock
+  controller node is not described, and `devicetree.py` rejects an unresolved
+  `clocks` reference. The property is left out rather than faked.
+- GIC `v2m@0` (ITS) is proven to exist but has no consumer yet, so it is not
+  described.
+- `/cpus` `capacity-dmips-mhz` (`0x400` = 1024 on the A75 cluster) is proven
+  but is a Linux scheduler hint, not something the ADT consumes.
+
+### 8.4 ADT generator requirements confirmed from source
+
+`scripts/unixnu/devicetree.py` (`generate()`, UniXNU `main`):
+
+- requires exactly one enabled child of `/` with `device_type = "memory"` and a
+  single `reg` tuple (line 302-304);
+- reads `timebase-frequency` from the `/cpus` node (line 391), so it must be a
+  scalar there, not on `/timer`;
+- synthesizes `/arm-io`, `/defaults`, `/options`, the `/chosen` CHRP NVRAM proxy
+  (`nvram-bank-size`, `nvram-proxy-data`), `random-seed`, `dram-base`/`dram-size`
+  itself — none of these may be hand-authored in the DTS;
+- `ArmDTPlatform::configure()` (submodule `e8bd8d5d`, `ArmDTPlatform.cpp`) fails
+  unless `/chosen` carries that NVRAM proxy and `/cpus`, `/arm-io`, `/defaults`,
+  `/options` exist — which is the generator's job, and the live vendor DT has
+  none of them (`/arm-io`, `/defaults`, `/options` are absent, no `*nvram*`
+  node exists);
+- `int(options['chip_id'], 16)` at line 313 is unconditional whenever
+  `--unique-chip-id` is supplied, so `[payload.adt] chip_id` is mandatory.
+
+`board.toml` now declares `chip_id = "0x8015"` — the value the selected OS
+profile already carries (`profile.toml [ipsw] chip_id = 32789`). It is an
+OS-identity value for the D22AP kernel being booted, not a Unisoc hardware ID;
+no vendor source documents a UMS512 `chip-id` DT property.

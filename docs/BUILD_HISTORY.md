@@ -19,7 +19,8 @@ Source: GitHub Actions REST API for `huhukh/unixnu-eebbk-a2_x2-ums512`, branch `
 | #134 | `45468918045` | `fbb7160`… | `os/ios-16.5: remove armvirt-platform-personality.patch duplicate` | `failure` (duplicate patch) |
 | #135 | `45473909907` | `fbb71605` | `os/ios-16.5: remove all arch: patches (duplicates from soc profile)` | `failure` (step 17 `apple-only-cpu-tunables.patch`) |
 | #136 | `45490266645` | `e189b2d9` | `os/ios-16.5: fix apple-only-cpu-tunables.patch line numbers` | `failure` (step 17 same patch, still wrong context) |
-| #137 | `45514291870` | `0a22314e` | `fix: align CPU tunables patch with XNU 8796 source` | pending at time of writing; patch still wrong (upstream context) |
+| #137 | `45514291870` | `0a22314e` | `fix: align CPU tunables patch with XNU 8796 source` | `failure` (step 17 same patch; hunks authored against a different `start.s`) |
+| #138 | `45525087213` | `0c12f50d` | `xnu: fix apple-only-cpu-tunables hunks against xnu-8796.121.2` | in progress — EDK2 job success; Linux steps 1-15 success (step 15 compiled the then-current DTS), step 16 toolchain running |
 
 ## Build #136 detail (measured)
 
