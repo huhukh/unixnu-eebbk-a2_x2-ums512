@@ -1,4 +1,4 @@
-
+﻿
 schema_version = 2
 
 [board]
@@ -23,13 +23,6 @@ include = [
 
 [kernel]
 defconfig = "realme-c21y-rmx3261_defconfig"
-
-# CI currently stages the native XNU executable without adding kernelcache kexts.
-# This path is the exact output of scripts/build-xnu-4k-baseline.sh.
-# Full prelink remains disabled until a C21Y-matched IPSW kernelcache and
-# its hash/closure have been verified.
-[kernel.prelink]
-kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped"
 
 config_fragments = [
   "arch:configs/common.config",
@@ -83,3 +76,15 @@ kernel_args = [
 unique_chip_id = "required"
 psci_method = "smc"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
+# scripts/unixnu/devicetree.py:313 does int(options['chip_id'], 16) whenever a
+# unique chip ID is passed, so the key is mandatory here; without it the ADT
+# generation dies with KeyError. The value is the one the selected OS profile
+# already declares (os-profiles/ios-16.5-20F66/profile.toml: [ipsw] chip_id =
+# 32789 = 0x8015, the D22AP identity of the iPhone10,3 kernel we boot). It is
+# an OS-identity value, NOT a Unisoc hardware ID: no vendor source documents a
+# UMS512 "chip-id" DT property, so inventing one would be unfounded.
+chip_id = "0x8015"
+
+[kernel.prelink]
+enabled = true
+components = ["DarwinBoot", "XnuPrelink"]

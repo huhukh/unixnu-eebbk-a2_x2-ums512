@@ -164,3 +164,79 @@ Ada juga broadcast clock event device kedua `sprd_timer` (`mult 70369`, `shift 3
 - 2026-11-25: ambil `/proc/config.gz`, `/proc/timer_list`, `/proc/interrupts`, `/sys/devices/system/clocksource`, listing `/proc/device-tree` — semua read-only.
 - 2026-11-25: replay 60 hunk dari 12 patch terhadap tree pinned; hanya `apple-only-cpu-tunables.patch` yang gagal.
 - 2026-11-25: `apple-only-cpu-tunables.patch` ditulis ulang + diverifikasi byte-per-byte.
+
+## Sesi 2026-11-25 (lanjutan) - DTS port dibandingkan byte-per-byte dengan DT live
+
+Fokus sesi ini: bukan menebak, tapi membandingkan `dts/` milik port dengan isi
+`/proc/device-tree` di HP yang benar-benar jalan. Semua dump diambil read-only
+dengan `od -An -tx1` (serial `1804093810BA06J3`), rinciannya masuk
+`docs/HARDWARE_EVIDENCE.md` §8.
+
+### Temuan: DTS port sebelumnya hanya stub
+
+`dts/realme-c21y-rmx3261.dts` cuma 681 byte dan **tidak punya node
+`device_type = "memory"`**. Itu bukan cacat kosmetik:
+`scripts/unixnu/devicetree.py:302-304` menolak ADT kalau tidak ada tepat satu
+node memory dengan satu tuple `reg` (`ADT handoff requires one contiguous DRAM
+range`). Artinya tahap payload/ADT pasti gagal walaupun kernel berhasil dilink.
+
+### 8 cacat yang terbukti dari byte DT live, dan perbaikannya
+
+| # | Sebelum (port) | Live | Sesudah (port) |
+| --- | --- | --- | --- |
+| 1 | `psci` = `"arm,psci-1.0"`, `"arm,psci-0.2"` | `61 72 6d 2c 70 73 63 69 2d 30 2e 32 00` = `arm,psci-0.2` saja | satu string `"arm,psci-0.2"` |
+| 2 | `/timer` punya `clock-frequency = <26000000>` | properti itu **tidak ada** | dihapus; 26 MHz hanya di `/cpus/timebase-frequency` |
+| 3 | GIC `#address-cells = <0>` | `#address-cells = 2`, `#size-cells = 2` | 2 / 2 |
+| 4 | GIC tanpa maintenance IRQ | `1 9 4` (PPI 9) | `interrupts = <1 9 4>` |
+| 5 | GIC pakai `AAPL,phandle = <0x1>` | DT live pakai `phandle` | `phandle = <0x1>` (workflow macOS yang mengubahnya jadi `AAPL,phandle` saat emit ADT) |
+| 6 | UART `"sprd,sc9836-uart"` saja | `"sprd,ums518-uart"` lalu `"sprd,sc9836-uart"` | urutan dibetulkan |
+| 7 | tidak ada node memory | `reg = <0 0x80000000 0 0xfffff000>` | `/memory@80000000` ditambahkan |
+| 8 | `tos-mem` `0x94040000` | `0x94060000` / `0x4fa0000` | dikoreksi |
+
+Catatan penting: DTB statis di `docs/C21Y-STOCK-DTB-MEMORY-INSPECTION.md` menulis
+DRAM 2 GiB (`0x80000000`), sedangkan tree yang benar-benar diserahkan ke kernel
+yang jalan menulis `size = 0xfffff000`. Yang dipakai port adalah nilai live.
+
+### Yang sengaja TIDAK diisi (biar tidak menebak)
+
+- `clocks` untuk UART: `clock-names = "enable","uart","source"` terbukti, tapi
+  node clock controller UMS512 belum dideskripsikan, dan generator ADT menolak
+  referensi phandle yang tidak resolve. Daripada memalsukan, properti
+  dihilangkan dan dicatat sebagai gap.
+- `v2m@0` (ITS/MSI GIC) terbukti ada di DT live, belum ada konsumen.
+- `capacity-dmips-mhz` (1024 di cluster A75) terbukti, tapi itu hint scheduler
+  Linux dan tidak dibaca ADT.
+
+### ADT: kebutuhan generator yang dikonfirmasi dari source
+
+`scripts/unixnu/devicetree.py` (UniXNU `main`) + `ArmDTPlatform.cpp`
+(submodule `e8bd8d5d`):
+
+- wajib tepat satu node `device_type = "memory"`, satu tuple `reg`;
+- `timebase-frequency` dibaca dari node `/cpus`, bukan `/timer`;
+- `/arm-io`, `/defaults`, `/options`, proxy NVRAM `/chosen`
+  (`nvram-bank-size`, `nvram-proxy-data`), `random-seed`, `dram-base`,
+  `dram-size` **dibuat oleh generator** — jangan ditulis manual di DTS. DT
+  vendor memang tidak punya `/arm-io`, `/defaults`, `/options`, atau node
+  `*nvram*` sama sekali;
+- `ArmDTPlatform::configure()` gagal kalau proxy NVRAM tidak ada, jadi tidak
+  bisa "dilewati";
+- baris 313 `int(options['chip_id'], 16)` jalan setiap kali `--unique-chip-id`
+  diberikan, jadi `[payload.adt] chip_id` **wajib**. Sebelumnya tidak ada di
+  `board.toml` → `KeyError` saat build payload.
+
+`board.toml` sekarang: `chip_id = "0x8015"` (32789), yaitu nilai yang sudah
+dideklarasikan OS profile `ios-16.5-20F66` untuk kernel D22AP/iPhone10,3 yang
+kita boot. Ini nilai identitas OS, **bukan** ID hardware Unisoc — tidak ada
+sumber vendor yang mendokumentasikan properti `chip-id` untuk UMS512, jadi
+mengarang nilai lain justru tidak berdasar.
+
+### Status build
+
+- Build #138 (run `45525087213`, head `0c12f50d`) masih berjalan; job EDK2
+  sukses, langkah 1-15 job Linux sukses (termasuk kompilasi DTS), langkah 16
+  (`Build Linux XNU toolchain`) sedang jalan. Langkah 17 (`Build native XNU
+  kernel`) belum mulai, jadi klaim "link berhasil" belum boleh dibuat.
+- Perubahan DTS/`board.toml` sesi ini belum di-commit/di-push; belum divalidasi
+  `dtc` (di lokal tidak ada `dtc`, `git`, `python`). Validasi DTS akan terjadi
+  di langkah 15 run berikutnya.
