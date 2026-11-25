@@ -77,6 +77,15 @@ jobs:
           test -f UniXNU/package/UniXNUPkg/Application/UniXNU/UniXNU.inf
           du -sh UniXNU
 
+      - name: Install iOS 16.5 OS profile
+        # The checkout is upstream UniXNU: it has no device OS profiles. The
+        # Linux workflow does this in its own step; without it `unixnu
+        # defconfig` cannot resolve ios-16.5-20F66/profile.toml (build #1 R22).
+        run: |
+          set -eux
+          bash device/scripts/install-os-profile.sh UniXNU
+          test -f UniXNU/profiles/os/ios-16.5-20F66/profile.toml
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
