@@ -313,3 +313,21 @@ Step 16 `Build Linux XNU toolchain` passed (1h 15m 33s); failure is step 17, fir
   - Dropped the bogus `index a261552b8cdd..f435c87d6ac7` line; git does not need it for `git apply`.
 - Verification performed offline before commit: both hunks were replayed against the fetched file and every context byte matched; the file is LF-only, 572 bytes, ends with a newline, and keeps the single leading space on tab-indented context lines.
 - All 60 hunks of all 12 patches in the OS series were replayed against the pinned tree. The only genuine mismatch was this patch (the other four reported offsets — `clang-uio-stackbuf` `sys_generic.c`/`vfs_lookup.c`, `native-aes-personality`, `zzx-pmap-sync-64bit-pa` — apply with a line offset because earlier patches in the same series shift text, which `git apply` tolerates).
+
+## R18 — Build #138: the *other* `apple-only-cpu-tunables.patch` was applied first
+
+**Evidence (run `45525087213`, head `0c12f50d`)**
+- Step 16 `Build Linux XNU toolchain` succeeded after 105 min. Step 17 failed in 2 s with the same message as #136:
+  `error: patch failed: osfmk/arm64/start.s:33` / `patch does not apply`.
+- The run summary's `status.json` prints the **resolved** configuration. It shows:
+  `board.kernel.patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series", "device:patches/xnu/series"]`,
+  while `board.kernel.prelink.patch_series` holds the three-entry board list.
+
+**Root cause**
+- At commit `0c12f50d`, `board.toml` declared `[kernel.prelink]` **before** its `config_fragments` / `patch_series` / `archives` arrays. In TOML every key after a table header belongs to that table, so those arrays landed in `[kernel.prelink]` and the real `[kernel]` kept only `defconfig`.
+- `profiles.merge()` replaces lists, but the board never supplied a `[kernel].patch_series`. The arch profile's list therefore survived and its first patch is UniXNU's xnu-10063-era `patches/xnu/apple-only-cpu-tunables.patch`. That patch's hunk 1 expects `#include <pexpert/arm64/board_config.h>` at line 33; the pinned xnu-8796 file has it at 32 and has `#include "assym.s"` at 35. Hence the failure at old line 33 — **not** the OS-series patch fixed in R17.
+- Proof: replaying the committed OS patch (`sha=f94c73d2`, 572 bytes) against `c54f35ca7679` succeeds with zero mismatches; replaying the arch patch's hunk 1 against the same file fails at exactly line 33.
+
+**Fix**
+- Commit `3614a701` moved `[kernel.prelink]` to the end of `board.toml`, so the three arrays now belong to `[kernel]` again. Current resolved `patch_series` is `soc → os → device`, with no `arch` entry (verified against the branch's `board.toml` and all three series files).
+- Consequence: builds #138/#139/#140 could never pass step 17 — they all started from commits with the broken board.toml. A fresh run at a post-`3614a701` head is required. The same TOML bug also meant the first build used only `arch:configs/common.config`; the corrected board now adds `soc:configs/ums512.config` and `os:configs/ios.config`.

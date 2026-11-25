@@ -5,14 +5,18 @@
 Read in this order:
 
 1. `PROJECT_STATE.md` §0 (current gate) and §1
-2. `docs/RESEARCH_LOG.md` R17 (the active root cause) and R9–R13 (closed history)
-3. `docs/BUILD_HISTORY.md` Build #136 detail
-4. `docs/HARDWARE_EVIDENCE.md` §2.1, §3, §4.1
-5. `os-profiles/ios-16.5-20F66/patches/xnu/series` and the 12 files under `os-profiles/ios-16.5-20F66/patches/xnu-8796/`
+2. `docs/RESEARCH_LOG.md` **R18** (active root cause), then R17 (closed patch fix) and R9–R13
+3. `docs/BUILD_HISTORY.md` Build #138 detail and the run table
+4. `docs/HARDWARE_EVIDENCE.md` §2.1, §3, §4.1, §8
+5. `board.toml` `[kernel]` and the three `patch_series` files
 
-Do not re-investigate the unifdef failure (closed, R9–R12) or the
-`arm64_platform_sleep_hook` link failure (closed, R13). The active gate is the
-`apple-only-cpu-tunables.patch` context mismatch (R17).
+Do not re-investigate the unifdef failure (closed, R9–R12), the
+`arm64_platform_sleep_hook` link failure (closed, R13), or the R17 patch context
+(fixed in `0c12f50d` and replayed with zero mismatches). **Immediate action:**
+start a fresh CI run at a post-`3614a701` head. Builds #138–#140 used a
+`board.toml` where `[kernel.prelink]` swallowed the real `[kernel]` arrays, so
+CI applied the arch patch first and could not reach our patch. Do not start that
+run with `[skip ci]` in the commit message.
 
 ## 1. Current state
 
@@ -121,7 +125,7 @@ For each: get the failing step from the jobs API, read the step log, root-cause 
 - Do not port `xnu-12377` sleep call sites: they call `arm_init_cpu()`, absent in 8796.
 - Do not set `platform-sleep=1`.
 - Do not "fix" the reported offsets in `clang-uio-stackbuf`, `native-aes-personality` or `zzx-pmap-sync-64bit-pa` — they apply correctly.
-- Do not re-add any `arch:` patch to the OS series; the SOC profile already applies `arch:patches/xnu/series`.
+- Do not re-add any `arch:` patch to the OS series or let `board.toml` fall back to `arch:patches/xnu/series`: that series targets xnu-10063 and fails at `start.s:33` on xnu-8796 (R18). Keep `[kernel].patch_series = soc → os → device` and keep `[kernel.prelink]` at the end of the file.
 - Do not add UART `clocks` phandles until a UMS512 clock-controller node with proven register data exists: `devicetree.py` hard-fails on an unresolved reference, and a fake provider is worse than a missing one.
 - Do not split `/memory@80000000` into banks or "restore" the static 2 GiB `0x80000000` size from the old notes: the ADT generator requires one contiguous range and the live tree says `0xfffff000`.
 - Do not write `AAPL,phandle` by hand in the DTS. `dtc` needs the standard `phandle` to resolve `&gic`; the macOS workflow rewrites `phandle` → `AAPL,phandle` when it emits the ADT.
