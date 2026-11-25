@@ -470,3 +470,9 @@ Run `45599346138`, head `d4869f5b`, job `139153789235`: created `10:54:02Z`, can
 ## R29 — macOS run #8 cancelled before starting (third occurrence)
 
 Run `45602086662`, head `d4869f5b`, job `139163320726`: created `11:11:25Z`, cancelled `11:26:26Z`, `steps: []`, `runner_id: 0`, no artifacts. Third identical 15-minute no-runner cancellation (R26, R28, R29). No code change is indicated; further blind re-dispatch is not useful. Need confirmation whether a person or an external automation is cancelling, or switch the dispatch input to `macos-15`.
+
+## R30 — Cause of macOS cancellations: no hosted runner acquired
+
+The user confirmed nobody cancelled the jobs manually. Check-run annotations for job `139163320726` (run #8) give the cause: `The job was not acquired by Runner of type hosted even after multiple attempts`, plus three notices `Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.` This explains `runner_id: 0`, empty `steps`, and the fixed ~15-minute lifetime across #5/#7/#8. GitHub status was operational; the failure is macOS arm64 runner capacity, not source, not workflow config.
+
+**Action**: dispatch run #9 (`45611688863`, head `29d051a2`) with `runner=macos-15`, `xcode=26.3`, branch `port/realme-c21y-rmx3261`, `kernel payload`, `unique_chip_id=0x8015`, upload images on, skip bindings check on. Job `139196580055` is queued with label `macos-15`. R23/R24/R27 source fixes are already in this head; Xcode 26.3 is above the 16.x `-Wno-unnecessary-virtual-specifier` failure floor. Do not cancel the queued job; a re-dispatch only restarts the queue.
