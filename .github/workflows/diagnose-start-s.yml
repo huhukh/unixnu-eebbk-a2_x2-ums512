@@ -1,0 +1,31 @@
+name: diagnose-start-s
+# Temporary: removed after the git-apply failure is root-caused.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: port/realme-c21y-rmx3261
+      - name: Fetch the CI-pinned vanilla start.s
+        run: |
+          set -eux
+          curl -fsSL https://raw.githubusercontent.com/apple-oss-distributions/xnu/c54f35ca767986246321eb901baf8f5ff7923f6a/osfmk/arm64/start.s -o /tmp/start.s
+          wc -lc /tmp/start.s
+          sed -n '30,42p' /tmp/start.s
+          sed -n '773,786p' /tmp/start.s
+      - name: Apply each candidate patch with the same git as CI
+        run: |
+          set -ux
+          mkdir -p /tmp/w/osfmk/arm64
+          cp /tmp/start.s /tmp/w/osfmk/arm64/start.s
+          cd /tmp/w
+          git init -q
+          echo "=== ours (os profile) ==="
+          git apply --check -v "$GITHUB_WORKSPACE/os-profiles/ios-16.5-20F66/patches/xnu-8796/apple-only-cpu-tunables.patch" || true
+          echo "=== upstream arch (xnu-10063) ==="
+          curl -fsSL https://raw.githubusercontent.com/UniXNU/UniXNU/main/patches/xnu/apple-only-cpu-tunables.patch -o /tmp/arch.patch
+          git apply --check -v /tmp/arch.patch || true
