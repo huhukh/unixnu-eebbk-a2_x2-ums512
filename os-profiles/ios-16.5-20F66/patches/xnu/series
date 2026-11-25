@@ -10,6 +10,12 @@
 # 8796 port of UniXNU's non-apple-iommu-bootstrap patch guards all four sites,
 # exactly as the arch (xnu-10063) series does. Evidence: build #143 R21.
 ../xnu-8796/8796-non-apple-iommu-bootstrap.patch
+# macOS bootstrap (build #2 R23): make_symbol_aliasing.sh looks for
+# availability.pl inside the Xcode SDK, where Xcode 26.6 does not ship it.
+# build-xnu-4k-baseline.sh builds it from the pinned AvailabilityVersions feed
+# into .cache/fakeroot and exports XNU_AVAILABILITY_PL; this 8796 port of
+# UniXNU's arch patch makes the script honour that variable.
+../xnu-8796/local-availability.patch
 ../xnu-8796/external-archive-dependencies.patch
 ../xnu-8796/native-aes-personality.patch
 ../xnu-8796/source-machine-layer.patch
