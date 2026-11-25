@@ -35,6 +35,13 @@ diff --git a/osfmk/arm/pmap/pmap.c b/osfmk/arm/pmap/pmap.c
  	 * point (i.e., pmap_data_bootstrap() performs allocations).
  	 */
  	avail_start = PMAP_ALIGN(avail_start, __alignof(bitmap_t));
+@@ -4678,5 +4678,5 @@
+ 			if (remove && (options & PMAP_OPTIONS_COMPRESSOR)) {
+ 				panic("pmap_page_protect: attempt to compress ppnum 0x%x owned by iommu %p, pve_p=%p",
+-				    ppnum, ptep_get_iommu(pte_p), pve_p);
++				    ppnum, (void *)pte_p, pve_p);
+ 			}
+ 			goto protect_skip_pve_pass1;
 @@ -5815,6 +5815,8 @@
  	pte |= ARM_PTE_AF;
  	return pte;
