@@ -134,6 +134,23 @@ jobs:
               arm.write_text(arm_text.replace(anchor, patched, 1))
           elif '-Wno-error=unknown-warning-option' not in arm_text:
               raise SystemExit('build-arm-driver.py: warning anchor not found')
+
+          # The mockfs recipe keeps the XNU compile record's -W flags, unlike
+          # build-arm-driver.py which drops them. Clang 17 also rejects some
+          # of those flags (run #11). Downgrade the unknown-option diagnostic
+          # and keep full stderr so any remaining error is visible.
+          mock = Path('UniXNU/scripts/build-mockfs-fixture.py')
+          mock_text = mock.read_text()
+          anchor = "command += ['-DMOCKFS=1']"
+          patched = "command += ['-DMOCKFS=1', '-Wno-error=unknown-warning-option']"
+          if anchor in mock_text:
+              mock_text = mock_text.replace(anchor, patched, 1)
+          elif '-Wno-error=unknown-warning-option' not in mock_text:
+              raise SystemExit('build-mockfs-fixture.py: flag anchor not found')
+          anchor = 'raise SystemExit(result.stderr[-4500:])'
+          if anchor in mock_text:
+              mock_text = mock_text.replace(anchor, 'raise SystemExit(result.stderr)', 1)
+          mock.write_text(mock_text)
           print('board components installed')
           PY
           git -C UniXNU status --short
