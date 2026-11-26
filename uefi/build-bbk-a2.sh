@@ -25,7 +25,9 @@
 #
 set -e
 
+
 MODE=${1:-DEBUG}
+
 
 FD_BASE=${BBK_A2_FD_BASE:-0x80800000}
 FD_SIZE=${BBK_A2_FD_SIZE:-0x400000}
@@ -33,76 +35,5 @@ FD_BLOCKS=${BBK_A2_FD_BLOCKS:-0x400}
 ROOT=`cd \`dirname $0\` && pwd`
 OUT=$ROOT/build
 
+
 # Extra flags for the shim: -DBBK_ARM_WATCHDOG, -DBBK_STAGE_COLORS,
-# -DBBK_KEEP_EL2, -DBBK_FB_BPP=16.  See BootShim/BootShim.S.
-SHIM_FLAGS=${SHIM_FLAGS:-}
-
-export BBK_A2_REPO=$ROOT
-
-ENV_SH=${BBK_A2_ENV:-$ROOT/env-linux.sh}
-if [ ! -f "$ENV_SH" ]; then
-  ENV_SH="${BBK_A2_DEPS:-$HOME/bbk-a2-uefi}/env.sh"
-fi
-if [ ! -f "$ENV_SH" ]; then
-  echo "== no EDK2 environment found: set BBK_A2_ENV=/path/to/env.sh ==" >&2
-  exit 1
-fi
-echo "== environment: $ENV_SH"
-. "$ENV_SH"
-
-# UniXNU.efi, UniXNUDxe, UniXNURamDiskDxe and DarwinBoot are part of the FV.
-if [ -z "${BBK_A2_UNIXNU:-}" ]; then
-  echo "== BBK_A2_UNIXNU is not set ==" >&2
-  echo "   point it at a UniXNU core checkout (package/ + drivers/DarwinBoot submodule):" >&2
-  echo "   git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/UniXNU/UniXNU.git" >&2
-  echo "   export BBK_A2_UNIXNU=\$PWD/UniXNU" >&2
-  exit 1
-fi
-echo "== UniXNU tree: $BBK_A2_UNIXNU"
-
-LLVM=${BBK_A2_LLVM_BIN:-${CLANGDWARF_BIN:-/usr/bin}}
-LLVM=${LLVM%/}
-PYTHON=${BBK_A2_PYTHON:-`command -v python3 || echo /usr/bin/python3`}
-BUILD_DIR=${BBK_A2_BUILD_DIR:-$WORKSPACE/Build/bbkA2Pkg/${MODE}_CLANGDWARF}
-
-mkdir -p "$OUT"
-
-# The FDF references the Shell startup script as a workspace-relative file.
-cp "$ROOT/Platforms/Unisoc/bbkA2Pkg/payload/startup.nsh" "$WORKSPACE/bbk-a2-startup.nsh"
-
-echo "== building EDK2 platform ($MODE) =="
-build -a AARCH64 -t CLANGDWARF -b "$MODE" -p bbkA2Pkg/bbkA2.dsc -n 8 \
-  -D FD_BASE=$FD_BASE -D FD_SIZE=$FD_SIZE -D FD_BLOCKS=$FD_BLOCKS
-
-FD=$BUILD_DIR/FV/SILICIUM_UEFI.fd
-test -f "$FD"
-cp "$FD" "$OUT/SILICIUM_UEFI.fd"
-
-echo "== building boot shim =="
-# Same flags UniXNU's scripts/unixnu/bootimg.py:compile_shim() uses, so the
-# header contract it enforces holds for both packers.
-$LLVM/clang --target=aarch64-none-elf -c "$ROOT/BootShim/BootShim.S" \
-  -o "$OUT/BootShim.o" \
-  -DFD_BASE=$FD_BASE -DFD_SIZE=$FD_SIZE -DREQUIRES_KERNEL_HEADER=1 $SHIM_FLAGS
-$LLVM/llvm-objcopy -O binary "$OUT/BootShim.o" "$OUT/BootShim.bin"
-
-echo "== assembling boot payload =="
-$PYTHON "$ROOT/tools/mk-boot-payload.py" \
-  "$OUT/BootShim.bin" "$OUT/SILICIUM_UEFI.fd" "$OUT/bbk-a2-uefi.bin"
-
-echo "== verifying header contract =="
-$PYTHON - "$OUT/BootShim.bin" "$OUT/SILICIUM_UEFI.fd" "$FD_BASE" "$FD_SIZE" <<'PY'
-import struct, sys
-shim = open(sys.argv[1], 'rb').read()
-fd   = open(sys.argv[2], 'rb').read()
-base = int(sys.argv[3], 16)
-size = int(sys.argv[4], 16)
-assert shim[56:60] == b'ARM\x64', 'no ARMd magic at offset 56'
-got = struct.unpack_from('<QQ', shim, 8)
-want = (base, len(shim) + size)
-assert got == want, f'image header {got} != {want}'
-assert len(fd) == size, f'FD is {len(fd):#x} bytes, config says {size:#x}'
-print(f'shim {len(shim)} bytes, FD {len(fd):#x} bytes, header {got[0]:#x}/{got[1]:#x} ok')
-PY
-
-ls -l "$OUT"
