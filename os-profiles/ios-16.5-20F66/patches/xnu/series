@@ -39,12 +39,22 @@
 ../xnu-8796/iorpc-kernel-content.patch
 # Current clang rejects __typeof__(*(void *)) in C++; backport xnu-10063's os_get_pointee_type() for kalloc type checks.
 ../xnu-8796/kalloc-pointee-type.patch
+# macOS run #12 R35: mockfs fixture failed __builtin_xnu_types_compatible on
+# kalloc_type/kfree_type(mockfs_fsnode_t, ...). The arch (xnu-10063) series carries
+# UniXNU's typed-allocation correction but this board applies soc/os/device only.
+# Same upstream patch applies byte-for-byte to the pinned 8796 source.
+../xnu-8796/8796-mockfs-typed-allocation.patch
 # The xnu-8796 source release omits osfmk/arm64/kpc.c; xnu-10063's file, whose non-Apple branch stubs the PMU backend.
 ../xnu-8796/arm64-kpc-from-xnu-10063.patch
 # UniXNU's archive builders read per-object compile records (clang -MJ), which xnu-10063's MakeInc.rule writes.
 ../xnu-8796/compile-records.patch
 # UniXNU's libpthread (519.120.4) calls proc_get_jit_entitled; backport that pthread callback from xnu-10063.
 ../xnu-8796/pthread-jit-entitled-callback.patch
+# Build #148 R36: build-libpthread-kernel.py compiles bsd/kern/source_pthread_bootstrap.c,
+# a new file supplied by UniXNU's arch arm64 series. This board's soc→os→device series
+# excludes arch, so the file is absent: clang-24 "no such file or directory". Add the
+# upstream new-file patch verbatim after the callback patch.
+../xnu-8796/8796-source-pthread-bootstrap.patch
 
 # XnuPrelink: the early security hook and sparse kext index (apply to xnu-8796 unchanged).
 component:XnuPrelink/patches/xnu-10063.141.1-security-init.patch
