@@ -1,4 +1,5 @@
-# Build the BBK A2 / X2 / X2P boot image from a real UEFI firmware volume.
+# Build the Realme C21Y RMX3261 (Unisoc UMS512) boot image from a real UEFI
+# firmware volume.
 #
 #   sh tools/build-bootimg.sh [FD] [OUT]
 #
@@ -9,10 +10,15 @@
 # Environment:
 #   UNIXNU_TREE  UniXNU core checkout (default: ../UniXNU next to this repo,
 #                or $GITHUB_WORKSPACE/UniXNU in CI)
+#   RAMDISK      the UniXNU payload FAT image (default: none).  The UMS512
+#                cboot passes the ramdisk through /chosen as the initrd, which
+#                BbkA2PayloadDxe publishes so UniXNU/DarwinBoot can read the
+#                payload.
+#   DTB          compiled device tree (default: build/realme-c21y-rmx3261.dtb)
 #
-# The image uses the stock A2 layout: raw BootShim+FD in the kernel field and
-# the device tree in the Android header v2 dtb_size/dtb_addr fields.  This is
-# what the Unisoc cboot loads; do NOT use the gzip+appended-dtb layout of
+# The image uses the stock UMS512 layout: raw BootShim+FD in the kernel field
+# and the device tree in the Android header v2 dtb_size/dtb_addr fields.  This
+# is what Unisoc cboot loads; do NOT use the gzip+appended-dtb layout of
 # `./unixnu bootimg` on this device.
 set -eu
 
@@ -20,16 +26,15 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 FD=${1:-$ROOT/uefi/build/SILICIUM_UEFI.fd}
 OUT=${2:-$ROOT/dist/boot.img}
 UNIXNU_TREE=${UNIXNU_TREE:-$ROOT/../UniXNU}
-DTB=$ROOT/build/bbk-a2-device-tree.dtb
+DTB=${DTB:-$ROOT/build/realme-c21y-rmx3261.dtb}
+RAMDISK=${RAMDISK:-none}
 
 if [ ! -f "$FD" ]; then
     echo "missing firmware volume: $FD" >&2
-    echo "build it first: sh uefi/build-bbk-a2.sh DEBUG" >&2
     exit 1
 fi
 if [ ! -d "$UNIXNU_TREE/scripts/unixnu" ]; then
     echo "missing UniXNU core checkout: $UNIXNU_TREE" >&2
-    echo "set UNIXNU_TREE=/path/to/UniXNU" >&2
     exit 1
 fi
 
@@ -38,7 +43,7 @@ mkdir -p "$ROOT/build" "$(dirname "$OUT")"
 echo "== compile device tree"
 dtc -I dts -O dtb \
     -i "$ROOT/soc/UniXNU-ums512-common/dts" \
-    -o "$DTB" "$ROOT/dts/bbk-a2.dts"
+    -o "$DTB" "$ROOT/dts/realme-c21y-rmx3261.dts"
 
 echo "== pack boot image"
 python3 "$ROOT/tools/pack-device-bootimg.py" \
@@ -47,6 +52,7 @@ python3 "$ROOT/tools/pack-device-bootimg.py" \
     --uefi "$ROOT/uefi" \
     --fd "$FD" \
     --dtb "$DTB" \
+    --ramdisk "$RAMDISK" \
     -o "$OUT"
 
 echo "== verify boot image"
