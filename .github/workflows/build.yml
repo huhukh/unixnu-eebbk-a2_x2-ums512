@@ -74,6 +74,7 @@ jobs:
             clang \
             lld \
             llvm \
+            mtools \
             make \
             cmake \
             nasm \
@@ -229,6 +230,23 @@ jobs:
             --out "$GITHUB_WORKSPACE/$OUTPUT_DIR"
           find "$GITHUB_WORKSPACE/$OUTPUT_DIR" -type f -path "*/kernel/kernel.macho" -size +0c -print -quit | grep .
 
+      - name: Build payload image
+        env:
+          UNIXNU_TOOLCHAIN: /opt/unixnu-linux
+          UNIXNU_UNIQUE_CHIP_ID: "0x8015"
+        run: |
+          set -eux
+          cd "$UNIXNU_DIR"
+          python3 ./unixnu build payload \
+            -D "$GITHUB_WORKSPACE" \
+            --out "$GITHUB_WORKSPACE/$OUTPUT_DIR" \
+            2>&1 | tee "$GITHUB_WORKSPACE/payload.log"
+          PAYLOAD=$(find "$GITHUB_WORKSPACE/$OUTPUT_DIR" -type f -path "*/payload/payload.img" -print -quit)
+          test -s "$PAYLOAD"
+          stat -c 'payload.img: %s bytes' "$PAYLOAD"
+          # 30 MiB payload window from board.toml, fits boot_a/b (64 MiB).
+          test "$(stat -c%s "$PAYLOAD")" -le 31457280
+
       - name: Upload build-check artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -237,6 +255,9 @@ jobs:
           path: |
             build/
             out/**/kernel/kernel.macho
+            out/**/payload/payload.img
+            out/**/payload/payload.json
+            payload.log
             out/**/logs/**
             out/**/tree/build/xnu/**/log/**
             status.json
@@ -352,5 +373,259 @@ jobs:
         with:
           name: realme-c21y-edk2-scaffold
           path: uefi/build-c21y/realme-c21y-uefi-scaffold.fd
+          if-no-files-found: warn
+          retention-days: 7
+
+  # The C21Y scaffold above has no UniXNU.efi, DarwinBoot or payload driver.
+  # This job builds the complete UMS512 platform (bbkA2Pkg) that the sibling
+  # EEBBK A2 / X2 port already boots: UniXNU.efi + UniXNUDxe +
+  # UniXNURamDiskDxe + DarwinBoot + Shell, with the same FD_BASE the C21Y
+  # config declares. It is the firmware layer the boot image needs.
+  firmware-a2:
+    name: firmware (EDK2 + Silicium UMS512 platform)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    env:
+      DEPS: ${{ github.workspace }}/deps
+    steps:
+      - name: Checkout C21Y device repository
+        uses: actions/checkout@v4
+        with:
+          ref: port/realme-c21y-rmx3261
+
+      - name: Free runner disk
+        run: |
+          set -eux
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/local/share/chromium /usr/lib/jvm /usr/local/.ghcup \
+            /opt/hostedtoolcache/Ruby /opt/hostedtoolcache/go /opt/hostedtoolcache/Nodejs \
+            /opt/hostedtoolcache/PyPy /usr/local/lib/node_modules 2>/dev/null || true
+          df -h /
+
+      - name: Install toolchain
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang-15 lld-15 llvm-15 uuid-dev nasm acpica-tools device-tree-compiler bc
+          for t in clang clang++ ld.lld llvm-ar llvm-objcopy llvm-rc llvm-nm llvm-objdump llvm-readelf; do
+            sudo ln -sf "/usr/bin/${t}-15" "/usr/bin/$t"
+          done
+          clang --version | head -1
+          iasl -v | head -2 || true
+          df -h /
+
+      - name: Clone pinned EDK2 dependencies
+        run: |
+          set -eux
+          mkdir -p "$DEPS"
+          clone_pin() {
+            name=$1; url=$2; branch=$3; pin=$4
+            dir="$DEPS/$name"
+            rm -rf "$dir"
+            git clone -q --depth 1 --branch "$branch" "$url" "$dir"
+            git -C "$dir" fetch -q --depth 1 origin "$pin" 2>/dev/null || true
+            if git -C "$dir" checkout -q "$pin" 2>/dev/null; then
+              echo "$name: $pin"
+            else
+              echo "WARN: $name pin $pin not in $branch, using branch tip"
+              git -C "$dir" checkout -q "$branch"
+            fi
+            git -C "$dir" rev-parse --short HEAD
+            test -d "$dir/.git"
+          }
+          clone_pin mu_basecore https://github.com/microsoft/mu_basecore release/202608 26bfddb2194b2058f7ac6163b00a2d94a9b7eac6
+          clone_pin mu_plus https://github.com/microsoft/mu_plus release/202608 566cf5c8c2c8adf8e1a337ced1d147bc6246856f
+          clone_pin mu_oem_sample https://github.com/microsoft/mu_oem_sample release/202608 9292f9254adb94c5e5bb09a370b9662fcd66a953
+
+          git clone -q --filter=blob:none --no-checkout https://github.com/UniXNU/uefi-sheng "$DEPS/uefi-sheng"
+          cd "$DEPS/uefi-sheng"
+          git sparse-checkout init --cone
+          git sparse-checkout set Silicon/Silicium
+          git fetch -q --depth 1 origin sheng
+          git checkout -q 0eb4514db0744b8136a3897ab1af93b713c2c27b 2>/dev/null || git checkout -q sheng
+          git rev-parse --short HEAD
+          ls -d Silicon/Silicium
+
+          cd "$DEPS/mu_basecore"
+          git submodule update --init --depth 1 \
+            BaseTools/Source/C/BrotliCompress/brotli \
+            MdeModulePkg/Library/BrotliCustomDecompressLib/brotli \
+            MdePkg/Library/MipiSysTLib/mipisyst \
+            MdePkg/Library/BaseFdtLib/libfdt \
+            SecurityPkg/DeviceSecurity/SpdmLib/libspdm
+          df -h /
+
+      - name: Clone UniXNU core (UniXNU.efi + UniXNUDxe + DarwinBoot)
+        run: |
+          set -eux
+          git clone -q --depth 1 --recurse-submodules --shallow-submodules https://github.com/UniXNU/UniXNU.git UniXNU
+          test -f UniXNU/package/UniXNUPkg/Application/UniXNU/UniXNU.inf
+          test -f UniXNU/package/UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe.inf
+          test -f UniXNU/package/UniXNUPkg/Driver/UniXNURamDiskDxe/UniXNURamDiskDxe.inf
+          test -f UniXNU/drivers/DarwinBoot/DarwinBootPkg/Driver/DarwinBoot.inf
+          du -sh UniXNU
+
+      - name: Build firmware
+        run: |
+          set -euxo pipefail
+          export BBK_A2_DEPS="$DEPS"
+          export BBK_A2_REPO="$GITHUB_WORKSPACE/uefi"
+          export BBK_A2_ENV="$GITHUB_WORKSPACE/uefi/env-linux.sh"
+          export BBK_A2_UNIXNU="$GITHUB_WORKSPACE/UniXNU"
+          export EDK_TOOLS_PATH="$DEPS/mu_basecore/BaseTools"
+          export WORKSPACE="$DEPS/work"
+          mkdir -p "$WORKSPACE"
+          test -d "$EDK_TOOLS_PATH/Source/C"
+          . "$BBK_A2_ENV"
+          make -C "$EDK_TOOLS_PATH/Source/C" -j"$(nproc)" 2>&1 | tee "$GITHUB_WORKSPACE/basetools-build.log"
+          cd "$GITHUB_WORKSPACE/uefi"
+          sh ./build-bbk-a2.sh DEBUG 2>&1 | tee "$GITHUB_WORKSPACE/firmware-build.log"
+
+      - name: Verify firmware artifacts
+        run: |
+          set -eux
+          test -f uefi/build/SILICIUM_UEFI.fd
+          test "$(stat -c%s uefi/build/SILICIUM_UEFI.fd)" = "$((0x400000))"
+          test -f uefi/build/BootShim.bin
+          test -f uefi/build/bbk-a2-uefi.bin
+          python3 - <<'PY'
+          import pathlib, struct
+          shim = pathlib.Path('uefi/build/BootShim.bin').read_bytes()
+          fd = pathlib.Path('uefi/build/SILICIUM_UEFI.fd').read_bytes()
+          assert shim[56:60] == b'ARM\x64', 'ARM64 image magic missing'
+          base, size = struct.unpack_from('<QQ', shim, 8)
+          assert base == 0x80800000, hex(base)
+          assert size == len(shim) + 0x400000, (hex(size), hex(len(shim) + 0x400000))
+          assert len(fd) == 0x400000, hex(len(fd))
+          print('shim header + FD size contract OK')
+          PY
+          BUILT="$DEPS/work/Build/bbkA2Pkg/DEBUG_CLANGDWARF/AARCH64"
+          test -f "$BUILT/UniXNUPkg/Application/UniXNU/UniXNU/OUTPUT/UniXNU.efi"
+          test -f "$BUILT/UniXNUPkg/Driver/UniXNUDxe/UniXNUDxe/OUTPUT/UniXNUDxe.efi"
+          test -f "$BUILT/UniXNUPkg/Driver/UniXNURamDiskDxe/UniXNURamDiskDxe/OUTPUT/UniXNURamDiskDxe.efi"
+          test -f "$BUILT/DarwinBootPkg/Driver/DarwinBoot/OUTPUT/DarwinBoot.efi"
+          echo 'UniXNU.efi + UniXNUDxe + UniXNURamDiskDxe + DarwinBoot built'
+          sha256sum uefi/build/SILICIUM_UEFI.fd uefi/build/BootShim.bin uefi/build/bbk-a2-uefi.bin
+
+      - name: Build log in job summary
+        if: always()
+        run: |
+          {
+            echo '## firmware build'
+            echo '```'
+            tail -120 "$GITHUB_WORKSPACE/firmware-build.log" 2>/dev/null || echo 'no firmware log'
+            echo '```'
+            echo '## basetools build (tail)'
+            echo '```'
+            tail -40 "$GITHUB_WORKSPACE/basetools-build.log" 2>/dev/null || echo 'no basetools log'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload firmware artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-a2
+          path: |
+            uefi/build/SILICIUM_UEFI.fd
+            uefi/build/BootShim.bin
+            uefi/build/bbk-a2-uefi.bin
+          if-no-files-found: warn
+          retention-days: 7
+
+  c21y-bootimg:
+    name: C21Y boot.img (raw BootShim + firmware + payload)
+    needs: [linux-build-check, firmware-a2]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout C21Y device repository
+        uses: actions/checkout@v4
+        with:
+          ref: port/realme-c21y-rmx3261
+
+      - name: Free runner disk
+        run: |
+          set -eux
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/local/share/chromium /usr/lib/jvm /usr/local/.ghcup \
+            /opt/hostedtoolcache/Ruby /opt/hostedtoolcache/go /opt/hostedtoolcache/Nodejs \
+            /opt/hostedtoolcache/PyPy /usr/local/lib/node_modules 2>/dev/null || true
+          df -h /
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install packing tools
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-15 lld-15 llvm-15 device-tree-compiler
+          for t in clang ld.lld llvm-ar llvm-objcopy llvm-rc llvm-nm; do
+            sudo ln -sf "/usr/bin/${t}-15" "/usr/bin/$t"
+          done
+          python3 --version
+          clang --version | head -1
+
+      - name: Download kernel, DTB and payload
+        uses: actions/download-artifact@v4
+        with:
+          name: realme-c21y-build-check
+          path: .
+
+      - name: Download UMS512 firmware volume
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-a2
+          path: uefi/build
+
+      - name: Clone UniXNU core (BootShim compiler + mkbootimg contract)
+        run: git clone -q --depth 1 https://github.com/UniXNU/UniXNU.git UniXNU
+
+      - name: Verify boot inputs
+        run: |
+          set -eux
+          test -s uefi/build/SILICIUM_UEFI.fd
+          test -s build/realme-c21y-rmx3261.dtb
+          PAYLOAD=$(find out -type f -path '*/payload/payload.img' -print -quit)
+          test -s "$PAYLOAD"
+          ls -l uefi/build/SILICIUM_UEFI.fd build/realme-c21y-rmx3261.dtb "$PAYLOAD"
+
+      - name: Pack boot.img (stock v2 layout, payload as ramdisk)
+        run: |
+          set -eux
+          PAYLOAD=$(find out -type f -path '*/payload/payload.img' -print -quit)
+          python3 tools/pack-device-bootimg.py \
+            --unixnu "$GITHUB_WORKSPACE/UniXNU" \
+            --device "$GITHUB_WORKSPACE" \
+            --uefi "$GITHUB_WORKSPACE/uefi" \
+            --fd uefi/build/SILICIUM_UEFI.fd \
+            --dtb build/realme-c21y-rmx3261.dtb \
+            --ramdisk "$PAYLOAD" \
+            -o dist/boot.img \
+            --report dist/boot-devicelayout.json
+          python3 tools/verify-bootimg.py dist/boot.img
+          stat -c 'boot.img: %s bytes' dist/boot.img
+          sha256sum dist/boot.img | tee dist/boot.img.sha256
+
+      - name: Enforce 35 MiB boot-fit gate
+        run: |
+          set -eux
+          SIZE=$(stat -c%s dist/boot.img)
+          echo "boot.img=$SIZE bytes (gate 36700160)"
+          test "$SIZE" -le 36700160
+
+      - name: Upload boot image artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realme-c21y-bootimg
+          path: |
+            dist/boot.img
+            dist/boot.img.sha256
+            dist/boot-devicelayout.json
           if-no-files-found: warn
           retention-days: 7
