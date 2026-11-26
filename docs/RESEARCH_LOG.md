@@ -515,6 +515,18 @@ Cause: `kalloc_type(mockfs_fsnode_t, ...)` at pinned source line 88 and `kfree_t
 
 **Fix**: new `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-mockfs-typed-allocation.patch`, verbatim upstream content, two hunks `@@ -85,7 +85,7 @@` and `@@ -154,7 +154,7 @@`; both replay byte-for-byte against pinned `mockfs_fsnode.c` (validated locally). Added to the OS `series` after `kalloc-pointee-type.patch`. Workflow shim now raises `SystemExit(result.stdout + result.stderr)` so a further fixture failure shows the diagnostic directly. Dispatch run #13 on `macos-15-intel` / Xcode `26.3`. Linux #147 is still in the toolchain step.
 
+## R43 — macOS #17: `NameError: VRAM_NEW` from bad R40 edit
+
+Run `45774993460`, head `1cf376d`: kernel built and Sdhci gate was skipped, then `Apply BBK A2 bring-up kernel patches` failed with `NameError: name 'VRAM_NEW' is not defined` at `patch-bringup-kernel.py:29` during `patch_vram_panic_log`. Root cause is local: the R40 edit removed the newline between the `VRAM_OLD` comment and `VRAM_NEW`, so the assignment was parsed as part of the comment. **Fix**: restore `VRAM_NEW` as its own assignment (`0x52800000, 0x72B3C000`, `mov w0,#0` + `movk w0,#0x9E00,lsl#16`), matching the existing `VRAM_OLD` pattern. No addresses changed. Committed before rerun; baseline remains 16.5/20F66.
+
+## R42 — 20H392 IPSW is iOS 16.7.16, not the 16.5 baseline
+
+`https://ipsw.me/install/iPhone10,3/20H392/` resolves via `api.ipsw.me` to **iOS 16.7.16 (20H392)**, direct file `https://updates.cdn-apple.com/2025FallFCS/fullrestores/122-77006/1158E502-D76D-4226-AA06-ED5E30CD1111/iPhone10,3,iPhone10,6_16.7.16_20H392_Restore.ipsw`. `os-profiles/ios-16.5-20F66/profile.toml` pins `16.5 / 20F66` and XNU `8796.121.2`; `scripts/unixnu/ipsw.py:_identity()` rejects any other `(ProductVersion, ProductBuildVersion)`. The 20F66 restore URL still returns HTTP 200 (6,165,698,198 bytes), so the baseline stays 16.5. macOS #17 (`45774993460`) was dispatched with an empty IPSW override, i.e. board.toml's 20F66 URL. A 16.7.16 baseline would need a new OS profile, XNU pin, trust-cache/ADT hashes and fresh validation, not a URL swap.
+
+## R41 — Linux #152 green: native `kernel.macho` verified
+
+Run `45742378628`, head `a0c8ee742e`: Linux job `139650253480` succeeded. Artifact `realme-c21y-build-check` is 72.5 MB, artifact digest `sha256:72e8b7670f40dd52c7b981a55a8eb1339bebf9c3ef648b5924aa6453748c674c`. Extracted `out/realme-c21y-rmx3261/ios-16.5-20F66/realme-c21y-rmx3261/kernel/kernel.macho`: **17,519,536 bytes**, SHA-256 `3607a7a375acee9f1943a573757881d057ddec50a56df4259d737d3f8f230a4d`, magic `0xfeedfacf`, cputype `0x0100000c` (ARM64), filetype `2` (`MH_EXECUTE`). This is the first verified non-empty native kernel artifact. It is not a bootable image and has no payload.
+
 ## R40 — macOS #16: AMFI PMGR patch absent from native kernel
 
 Run `45752197611`, head `e57034c`: `kernel.macho` produced and bring-up step ran. `patch-bringup-kernel.py` applied the C21Y VRAM panic-log retarget (file offset `0x90a4c8`) but failed with `amfi no-pmgr: panic string not found` and, because `main()` aborts on any miss, wrote nothing. Root cause: the `"AMFI: No PMGR?\n" @%s:%d` pattern and its helper are in the Apple-prelinked `AppleMobileFileIntegrity` kext, not in a native `--skip-prelink` xnu-8796 kernel. **Fix**: add explicit opt-in `--allow-missing-amfi` to `scripts/patch-bringup-kernel.py` (strict by default) and pass it only from the macOS workflow's native-kernel path. VRAM pattern remains mandatory and idempotent; no AMFI address invented. Rerun #17 with `skip_bindings_check=true` and `upload_images=true`.
