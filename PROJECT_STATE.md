@@ -1,6 +1,6 @@
 # PROJECT_STATE — Realme C21Y RMX3261 / UMS512 XNU 16.5 port
 
-_Last updated: 2026-11-25 (Build #143 root cause R21). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
+_Last updated: 2026-11-26 (R37 root cause `kernel` key). All statements below are evidence-bound. Compile, boot and hardware support are separate claims._
 
 ## 0. Current gate (read this first)
 
@@ -14,6 +14,10 @@ While #138 runs, the device tree was rebuilt from the live hardware and separate
 - `f09d4fa1` — `dts/realme-c21y-rmx3261.dts` rebuilt (was a 681-byte stub with **no** `device_type = "memory"` node, which the ADT generator hard-rejects): one contiguous DRAM range `0x80000000`/`0xfffff000`, the 17 live reserved-memory regions, `sprd,ums512`-only compatible, `stdout-path`.
 - `3614a701` — `[payload.adt] chip_id = "0x8015"` (mandatory: `devicetree.py:313` reads it whenever `--unique-chip-id` is passed); profile-derived OS identity, not a Unisoc hardware ID.
 - Builds #139 (head `3f4c55d0`) and #140 (head `f09d4fa1`) both **passed step 15 `Compile C21Y device tree`**, so `dtc` accepts the new DTS and DTSI. That is a syntax/cell-count proof only, not an ADT or hardware proof.
+- **Build #147 (`45637627747`) step 17 failed R35** — `mockfs_fsnode.c` typed-allocation assertion in `build-mockfs-fixture.py`; root cause target-independent.
+- **#148 (`5482121f`)** removed `build-mockfs-fixture.py` from `board.toml` `archives` (offline fixture, `CONFIG_XNU_SOURCE_MOCKFS` unset) and reached `build-libpthread-kernel.py`; **#149/#150** step 14 `patch missing` on `8796-mockfs-typed-allocation.patch` (series line had landed, file had not) — file since committed.
+- **#151 (`45730418999`, head `c129533f`)** step 17: all 26 patches applied, XNU compiled, all seven archives built, then `KeyError: 'kernel'` — `scripts/unixnu/kernel.py:317-325` reads `spec['kernel']` and `is_file()` **before** the `--skip-prelink` branch (`stage_native`). `board.toml [kernel.prelink]` lacked `kernel`; fix adds `kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped"` (the xnu-8796 output; the profile's `.unstripped.noctf` name is an xnu-10063 convention the 8796 makedefs never emits).
+- `kernel.macho`: **never produced** — link stage not reached in any run; `R37` has the detail.
 
 The earlier root cause, kept for the record (docs/RESEARCH_LOG.md R17): the patch's second hunk was authored for a different `start.s`. It declared `@@ -783,10 +785,13 @@` and closed with `#if HAS_CLUSTER && !NO_CPU_OVRD`; the pinned release `xnu-8796.121.2` / commit `c54f35ca7679` has `#endif // APPLE_ARM64_ARCH_FAMILY` at line 775, the MIDR block at 777-780, and `#if HAS_CLUSTER` (no `&& !NO_CPU_OVRD`) at 783. The same two defects existed in upstream `zus12873/UniXNU:patches/xnu/apple-only-cpu-tunables.patch`.
 
