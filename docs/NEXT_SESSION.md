@@ -5,7 +5,7 @@
 Read in this order:
 
 1. `PROJECT_STATE.md` §0 (current gate) and §1
-2. `docs/RESEARCH_LOG.md` **R21** (active root cause), then R20/R19/R18 (closed gates), R17 and R9–R13
+2. `docs/RESEARCH_LOG.md` **R37** (active root cause), then R36/R35 mockfs+pthread bootstrap and R21–R27 closed gates
 3. `docs/BUILD_HISTORY.md` Build #143 detail and the run table
 4. `docs/HARDWARE_EVIDENCE.md` §2.1, §3, §4.1, §8
 5. `board.toml` `[kernel]` and the three `patch_series` files

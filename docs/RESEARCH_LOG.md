@@ -515,6 +515,12 @@ Cause: `kalloc_type(mockfs_fsnode_t, ...)` at pinned source line 88 and `kfree_t
 
 **Fix**: new `os-profiles/ios-16.5-20F66/patches/xnu-8796/8796-mockfs-typed-allocation.patch`, verbatim upstream content, two hunks `@@ -85,7 +85,7 @@` and `@@ -154,7 +154,7 @@`; both replay byte-for-byte against pinned `mockfs_fsnode.c` (validated locally). Added to the OS `series` after `kalloc-pointee-type.patch`. Workflow shim now raises `SystemExit(result.stdout + result.stderr)` so a further fixture failure shows the diagnostic directly. Dispatch run #13 on `macos-15-intel` / Xcode `26.3`. Linux #147 is still in the toolchain step.
 
+## R37 — Linux #151: `KeyError: 'kernel'` at `--skip-prelink`
+
+Run `45730418999`, head `c129533f`: toolchain rebuilt, all 26 patches applied, XNU compiled and all 7 archives built (corecrypto ×2, ArmDTPlatform, ArmCpu, SoftwareAES, AES bindings, libpthread), then `kernel.py:341` raised `KeyError: 'kernel'`. Root cause: `scripts/unixnu/kernel.py:317-325` reads `spec['kernel']` and tests `is_file()` **before** the `--skip-prelink` branch that calls `stage_native()`. `board.toml [kernel.prelink]` had only `enabled` and `components`, so the workflow's `--skip-prelink` could never stage the native kernel. Also, the profile names `mach.development.bcm2837.unstripped.noctf` (xnu-10063 convention) which xnu-8796 never produces; `build-xnu-4k-baseline.sh:847` and device record nx769j both confirm the real output is `mach.development.bcm2837.unstripped`.
+
+**Fix**: add `kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped"` to `[kernel.prelink]` in `board.toml` (same value as the profile, minus the nonexistent `.noctf` suffix). No source patch: `stage_native()` validates `MH_EXECUTE` arm64 (`0xfeedfacf`, cputype `0x100000c`) before writing candidate `kernel.macho`. Rerun Linux build; if green, verify artifact size/SHA-256/Mach-O header. No flash/boot until verified.
+
 ## R36 — Linux #147/#148 and later: same mockfs gate, then missing source_pthread_bootstrap.c
 
 Linux `45637627747` (#147, head `715d8d18`) failed step 17 with the same `mockfs_fsnode.c` typed-allocation error (`619 warnings and 2 errors generated`), confirming R35 is target-independent. Commit `5482121f` removed `build-mockfs-fixture.py` from `board.toml` `archives`, following UniXNU's own x769j/xwsjjctz records: the kernel only force-loads that archive when `CONFIG_XNU_SOURCE_MOCKFS` is set, and this board leaves it unset. That closes the fixture path without adding a source patch for an offline test root.
