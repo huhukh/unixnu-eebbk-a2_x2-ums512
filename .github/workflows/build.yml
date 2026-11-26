@@ -244,8 +244,8 @@ jobs:
           PAYLOAD=$(find "$GITHUB_WORKSPACE/$OUTPUT_DIR" -type f -path "*/payload/payload.img" -print -quit)
           test -s "$PAYLOAD"
           stat -c 'payload.img: %s bytes' "$PAYLOAD"
-          # 30 MiB payload window from board.toml, fits boot_a/b (64 MiB).
-          test "$(stat -c%s "$PAYLOAD")" -le 31457280
+          # 32 MiB payload window from board.toml; smallest FAT32 mformat allows.
+          test "$(stat -c%s "$PAYLOAD")" -le 33554432
 
       - name: Upload build-check artifacts
         if: always()
@@ -611,12 +611,12 @@ jobs:
           stat -c 'boot.img: %s bytes' dist/boot.img
           sha256sum dist/boot.img | tee dist/boot.img.sha256
 
-      - name: Enforce 35 MiB boot-fit gate
+      - name: Enforce 64 MiB boot-fit gate
         run: |
           set -eux
           SIZE=$(stat -c%s dist/boot.img)
-          echo "boot.img=$SIZE bytes (gate 36700160)"
-          test "$SIZE" -le 36700160
+          echo "boot.img=$SIZE bytes (gate 67108864 = boot_a/b 64 MiB)"
+          test "$SIZE" -le 67108864
 
       - name: Upload boot image artifact
         if: always()
