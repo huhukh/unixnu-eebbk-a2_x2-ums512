@@ -3,15 +3,19 @@
 # address, handoff registers, FD relocation window, and live FDT are verified.
 [boot_shim]
 requires_kernel_header = true
+shim_flags = ["BBK_ARM_WATCHDOG", "BBK_KEEP_EL2"]
+
 
 [uefi_fd]
-# PLACEHOLDER ONLY: no C21Y-safe FD base has been established.
+
 base = 0x80800000
 size = 0x400000
+
 
 [boot_image_kernel]
 kernel_compression = "none"
 append_dtb = false
+
 
 [boot_image]
 header_version = 2
