@@ -7,7 +7,7 @@ UniXNU's `./unixnu bootimg` produces an Android boot image whose "kernel" is:
 
 This script unpacks the Android header (v0..v4), gunzips the kernel payload, splits the
 BootShim from the firmware volume, validates the AArch64 Image header fields the shim
-inherits (magic "ARM\\x64", text_offset = FD base, image_size = shim + FD), checks the
+inherits (magic "ARM\x64", text_offset = 0x80000 for C21Y/eebbk A2, image_size = shim + FD), checks the
 FV header signature/length, checks the appended DTB magic/totalsize, and prints offsets,
 sizes and SHA-256 for every part. No device or UEFI runtime is needed.
 
@@ -164,7 +164,13 @@ def parse_android_header(data, report):
 
 
 def parse_bootshim(shim, fd_size, fd_base, report, fd_total=None):
-    """Validate the AArch64 Image header the BootShim carries in front of the FD."""
+    """Validate the AArch64 Image header the BootShim carries in front of the FD.
+
+    For C21Y (and stock eebbk A2 kernels): text_offset MUST be 0x80000 (offset
+    from DRAM base 0x80000000), NOT the FD base address. The ARM64 boot protocol
+    defines text_offset as an offset from the start of RAM, while the shim's
+    internal FD_BASE/FD_SIZE parameters describe where the FD is relocated.
+    """
     if len(shim) < 64:
         report.fail('bootshim header', f'shim is only {len(shim)} bytes, shorter than a 64-byte Image header')
         return
@@ -173,13 +179,14 @@ def parse_bootshim(shim, fd_size, fd_base, report, fd_total=None):
     flags = u64(shim, 24)
     magic = shim[56:60]
     report.check('bootshim ARM64 magic', magic == ARM64_IMAGE_MAGIC,
-                 f'bytes 56..60 = {magic!r} (expected b"ARM\\\\x64")')
-    if fd_base is not None:
-        report.check('bootshim text_offset == FD base', text_offset == fd_base,
-                     f'text_offset=0x{text_offset:x} fd_base=0x{fd_base:x}')
-    else:
-        report.info['bootshim_text_offset'] = hex(text_offset)
-        report.check('bootshim text_offset', text_offset != 0, f'text_offset=0x{text_offset:x} (no --fd-base given)')
+                 f'bytes 56..60 = {magic!r} (expected b"ARM\\x64")')
+    # C21Y / eebbk A2 stock kernel uses text_offset=0x80000, flags=0xA
+    expected_text_offset = 0x80000
+    expected_flags = 0xA
+    report.check('bootshim text_offset == 0x80000 (C21Y stock)', text_offset == expected_text_offset,
+                 f'text_offset=0x{text_offset:x} expected=0x{expected_text_offset:x}')
+    report.check('bootshim flags == 0xA (C21Y stock)', flags == expected_flags,
+                 f'flags=0x{flags:x} expected=0x{expected_flags:x}')
     expect_image = len(shim) + (fd_size if fd_size is not None else 0)
     if fd_size is not None:
         report.check('bootshim image_size == shim + FD', image_size == expect_image,
@@ -375,8 +382,7 @@ def verify(path, fd_base=None, fd_size=None, expect_header_version=None, expect_
     if not appended and not header_tree:
         report.fail('device tree', 'no DTB appended after the gzip stream and no header dtb_size')
     tree_bytes = len(appended) or len(header_tree)
-    dtb_in_image = (layout['kernel_offset'] + len(kernel) - len(appended)) if appended \
-        else layout.get('dtb_offset_in_image')
+    dtb_in_image = (layout['kernel_offset'] + len(kernel) - len(appended)) if appended         else layout.get('dtb_offset_in_image')
     report.info['layout'] = {
         'android_header_bytes': layout['header_size'],
         'kernel_offset': hex(layout['kernel_offset']),
