@@ -26,7 +26,8 @@ Usage: patch-bringup-kernel.py <kernel.macho>
 import struct
 import sys
 
-VRAM_OLD = struct.pack("<II", 0x52980000, 0x72A781E0)  # mov w0,#0xC000 ; movk w0,#0x3C0F,lsl#16VRAM_NEW = struct.pack("<II", 0x52800000, 0x72B3C000)  # mov w0,#0 ; movk w0,#0x9E00,lsl#16
+VRAM_OLD = struct.pack("<II", 0x52980000, 0x72A781E0)  # mov w0,#0xC000 ; movk w0,#0x3C0F,lsl#16
+VRAM_NEW = struct.pack("<II", 0x52800000, 0x72B3C000)  # mov w0,#0 ; movk w0,#0x9E00,lsl#16
 
 AMFI_FMT = b'"AMFI: No PMGR?\\n" @%s:%d'
 AMFI_HELPER_EPILOGUE = struct.pack(
