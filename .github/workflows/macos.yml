@@ -203,7 +203,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
-          ./unixnu build kernel 2>&1 | tee "$GITHUB_WORKSPACE/kernel.log"
+          # C21Y has no validated iOS 16.5 kernelcache pin or prelink tool.
+          # Build the native xnu-8796 Mach-O directly; Linux CI uses the same
+          # --skip-prelink path. `kernel.prelink.kernel` only satisfies the
+          # config read that happens before this branch (scripts/unixnu/kernel.py).
+          ./unixnu build kernel --skip-prelink 2>&1 | tee "$GITHUB_WORKSPACE/kernel.log"
 
       - name: Check the SdhciBlock storage bindings against the kernel
         # The driver's IOStorageFamily imports are bound to absolute addresses
