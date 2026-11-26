@@ -51,6 +51,12 @@ archives = [
 source = "device:dts/realme-c21y-rmx3261.dts"
 include_dirs = ["soc:dts"]
 
+[firmware]
+# scripts/unixnu/bootimg.py loads uefi/Resources/Configs/<config>.toml from
+# --uefi and takes [boot_shim] and [uefi_fd] from it. The C21Y values there
+# are stock-derived placeholders; see uefi/C21Y-UEFI-STATUS.md.
+config = "realme-c21y"
+
 [bootimg.image]
 base = 0x0
 kernel_offset = 0x8000
@@ -58,10 +64,18 @@ ramdisk_offset = 0x5400000
 tags_offset = 0x100
 pagesize = 2048
 header_version = 2
+# Stock boot.bin carries a raw AArch64 Image (no gzip). U-Boot 2015.07
+# start_linux loads the kernel field to 0x80080000 without decompressing it,
+# and BootShim.S emits the "ARM\x64" header when requires_kernel_header=1.
+kernel_compression = "none"
 
 [payload]
 volume = "UNIXNU"
 loader = "firmware"
+# 30 MiB keeps boot.img (header + 4 MiB BootShim/FD + payload + DTB) under
+# the 35 MiB boot-fit gate and inside the 64 MiB boot_a/b slot. The 192 MiB
+# default cannot fit any existing C21Y partition.
+size_mib = 30
 title = "UniXNU Realme C21Y"
 panic_screen = false
 timeout = 0
