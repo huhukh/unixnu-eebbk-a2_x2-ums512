@@ -8,12 +8,10 @@ The stock boot image of this board is ANDROID! header v2 with:
 
 `./unixnu bootimg` instead appends the DTB after a gzip-compressed kernel
 (Image.gz-dtb style) and cannot fill the header v2 dtb fields (AOSP mkbootimg
-rejects an empty --dtb for v2). This script keeps UniXNU's BootShim compiler and
-mkbootimg.py but produces the stock layout:
-
-    kernel field = BootShim || UEFI firmware volume      (raw, no compression)
-    dtb field    = device tree                            (header v2 dtb_size/dtb_addr)
-    ramdisk      = empty
+rejects an empty --dtb for v2). This script keeps UniXNU's mkbootimg.py but
+compiles the BootShim locally so we can pass device-specific flags
+(BBK_ARM_WATCHDOG, BBK_KEEP_EL2, etc.) and enforce the correct ARM64 Image
+header values (text_offset=0x80000, flags=0xA) for C21Y.
 
 Parameters are read from the device repository's board.toml ([bootimg.image]
 overrides the UEFI config [boot_image]) and from the UEFI checkout's
@@ -32,6 +30,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import shutil
 import struct
 import subprocess
 import sys
@@ -58,9 +57,73 @@ def merge_image_settings(device, uefi, config_name):
     return values, config, board, config_path
 
 
+def compile_shim(uefi, base, size, requires_header, scratch, shim_flags):
+    """Compile BootShim.S with device-specific flags and verify the ARM64 Image header.
+
+    This mirrors UniXNU's scripts/unixnu/bootimg.py:compile_shim() but allows
+    passing additional -D flags (BBK_ARM_WATCHDOG, BBK_KEEP_EL2, etc.) and
+    asserts the C21Y-correct header values (text_offset=0x80000, flags=0xA).
+    """
+    clang = shutil.which('clang') or '/usr/bin/clang'
+    objcopy = shutil.which('llvm-objcopy') or '/usr/bin/llvm-objcopy'
+    nm = shutil.which('llvm-nm') or '/usr/bin/llvm-nm'
+
+    source = uefi / 'BootShim' / 'BootShim.S'
+    if not source.is_file():
+        raise SystemExit(f'{source} missing: --uefi must be a Mu-Silicium checkout')
+
+    obj = scratch / 'shim.o'
+    flags = [
+        '-DFD_BASE=0x{:x}'.format(base),
+        '-DFD_SIZE=0x{:x}'.format(size),
+        '-DREQUIRES_KERNEL_HEADER={}'.format(int(requires_header)),
+    ]
+    if shim_flags:
+        flags.extend(['-D{}'.format(f) for f in shim_flags])
+
+    subprocess.run([clang, '--target=aarch64-none-elf', '-c', str(source), '-o', str(obj)] + flags, check=True)
+    subprocess.run([objcopy, '-O', 'binary', str(obj), str(scratch / 'shim.bin')], check=True)
+
+    shim = (scratch / 'shim.bin').read_bytes()
+
+    # Verify _Payload is at the very end (no literal pool / padding).
+    symbols = subprocess.run([nm, '-n', str(obj)], capture_output=True, text=True, check=True).stdout
+    payload_offset = None
+    for line in symbols.splitlines():
+        if line.endswith(' _Payload'):
+            payload_offset = int(line.split()[0], 16)
+            break
+    if payload_offset is None:
+        raise SystemExit('_Payload symbol not found in shim')
+    if payload_offset != len(shim):
+        raise SystemExit('a literal pool or padding separates the _Payload label from the appended firmware volume')
+
+    # Verify ARM64 Image header contract (C21Y values).
+    # Offset 8: text_offset (must be 0x80000 for Unisoc cboot)
+    # Offset 16: image_size (must be shim + FD)
+    # Offset 24: flags (must be 0xA for C21Y stock kernel)
+    # Offset 56: magic "ARM\x64"
+    if requires_header:
+        if shim[56:60] != b'ARM\x64':
+            raise SystemExit('no ARMd magic at offset 56')
+        text_offset, image_size = struct.unpack_from('<QQ', shim, 8)
+        expected_text_offset = 0x80000
+        expected_image_size = len(shim) + size
+        if text_offset != expected_text_offset:
+            raise SystemExit(f'bootshim text_offset=0x{text_offset:x}, expected 0x{expected_text_offset:x}')
+        if image_size != expected_image_size:
+            raise SystemExit(f'bootshim image_size=0x{image_size:x}, expected 0x{expected_image_size:x}')
+        flags_val = struct.unpack_from('<Q', shim, 24)[0]
+        expected_flags = 0xA
+        if flags_val != expected_flags:
+            raise SystemExit(f'bootshim flags=0x{flags_val:x}, expected 0x{expected_flags:x}')
+
+    return shim
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('--unixnu', default='_repos/UniXNU', help='UniXNU build tree (for bootimg.compile_shim)')
+    parser.add_argument('--unixnu', default='_repos/UniXNU', help='UniXNU build tree (for mkbootimg.py)')
     parser.add_argument('--device', default='build/bbk-a2-device', help='device repository (board.toml)')
     parser.add_argument('--uefi', default='build/uefi-bbk-a2', help='Mu-Silicium-style checkout (BootShim + mkbootimg + config)')
     parser.add_argument('--config', default=None, help='override the UEFI device config toml')
@@ -100,7 +163,11 @@ def main(argv=None):
         raise SystemExit(f'{config_path} has no [uefi_fd] base/size')
     if fd.stat().st_size != size:
         raise SystemExit(f'firmware volume is {fd.stat().st_size:#x} bytes, config says {size:#x}')
-    requires_header = config.get('boot_shim', {}).get('requires_kernel_header', True)
+
+    boot_shim_cfg = config.get('boot_shim', {})
+    requires_header = boot_shim_cfg.get('requires_kernel_header', True)
+    shim_flags = boot_shim_cfg.get('shim_flags', [])
+
     kernel_cfg = config.get('boot_image_kernel', {})
     compression = kernel_cfg.get('kernel_compression', 'none')
     if args.gzip_kernel:
@@ -110,13 +177,9 @@ def main(argv=None):
     if compression not in ('none', 'gzip'):
         raise SystemExit(f'unsupported [boot_image_kernel] kernel_compression = {compression!r}')
 
-    # UniXNU's own shim compiler: identical output to `./unixnu bootimg`.
-    sys.path.insert(0, str(unixnu / 'scripts'))
-    from unixnu import bootimg  # noqa: E402
-
     with tempfile.TemporaryDirectory(prefix='pack-bootimg-') as name:
         scratch = Path(name)
-        shim = bootimg.compile_shim(uefi, base, size, requires_header, scratch)
+        shim = compile_shim(uefi, base, size, requires_header, scratch, shim_flags)
         combined = shim + fd.read_bytes()
         kernel = scratch / 'kernel'
         if compression == 'gzip':
