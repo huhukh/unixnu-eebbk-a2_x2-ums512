@@ -26,8 +26,7 @@ Usage: patch-bringup-kernel.py <kernel.macho>
 import struct
 import sys
 
-VRAM_OLD = struct.pack("<II", 0x52980000, 0x72A781E0)  # mov w0,#0xC000 ; movk w0,#0x3C0F,lsl#16
-VRAM_NEW = struct.pack("<II", 0x52800000, 0x72B3C000)  # mov w0,#0 ; movk w0,#0x9E00,lsl#16
+VRAM_OLD = struct.pack("<II", 0x52980000, 0x72A781E0)  # mov w0,#0xC000 ; movk w0,#0x3C0F,lsl#16VRAM_NEW = struct.pack("<II", 0x52800000, 0x72B3C000)  # mov w0,#0 ; movk w0,#0x9E00,lsl#16
 
 AMFI_FMT = b'"AMFI: No PMGR?\\n" @%s:%d'
 AMFI_HELPER_EPILOGUE = struct.pack(
@@ -118,9 +117,12 @@ def patch_vram_panic_log(data, segments):
     return True
 
 
-def patch_amfi_no_pmgr(data, segments):
+def patch_amfi_no_pmgr(data, segments, allow_missing):
     fmt_offset = data.find(AMFI_FMT)
     if fmt_offset < 0:
+        if allow_missing:
+            print("amfi no-pmgr: not present (native --skip-prelink kernel has no macOS kext); skipping")
+            return True
         print("amfi no-pmgr: panic string not found", file=sys.stderr)
         return False
     fmt_va = file_to_va(segments, fmt_offset)
@@ -158,10 +160,15 @@ def patch_amfi_no_pmgr(data, segments):
 
 
 def main():
-    if len(sys.argv) != 2:
+    args = [a for a in sys.argv[1:]]
+    allow_missing = False
+    if '--allow-missing-amfi' in args:
+        allow_missing = True
+        args = [a for a in args if a != '--allow-missing-amfi']
+    if len(args) != 1:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
-    path = sys.argv[1]
+    path = args[0]
     with open(path, "rb") as handle:
         data = bytearray(handle.read())
     segments = read_segments(data)
@@ -169,7 +176,7 @@ def main():
         print("no LC_SEGMENT_64 commands found", file=sys.stderr)
         return 1
     ok = patch_vram_panic_log(data, segments)
-    ok = patch_amfi_no_pmgr(data, segments) and ok
+    ok = patch_amfi_no_pmgr(data, segments, allow_missing) and ok
     if not ok:
         return 1
     with open(path, "wb") as handle:
