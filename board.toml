@@ -72,10 +72,11 @@ kernel_compression = "none"
 [payload]
 volume = "UNIXNU"
 loader = "firmware"
-# 30 MiB keeps boot.img (header + 4 MiB BootShim/FD + payload + DTB) under
-# the 35 MiB boot-fit gate and inside the 64 MiB boot_a/b slot. The 192 MiB
-# default cannot fit any existing C21Y partition.
-size_mib = 30
+# 32 MiB keeps boot.img (header + 4 MiB BootShim/FD + payload + DTB, ~36.5 MiB)
+# inside the 64 MiB boot_a/b slot. It is also the smallest FAT32 volume mformat
+# accepts with 512-byte clusters (>= 65525 clusters): 30 MiB fails with "Too
+# few clusters for 32 bit fat". The 192 MiB default cannot fit any partition.
+size_mib = 32
 title = "UniXNU Realme C21Y"
 panic_screen = false
 timeout = 0
