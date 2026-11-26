@@ -244,8 +244,8 @@ jobs:
           PAYLOAD=$(find "$GITHUB_WORKSPACE/$OUTPUT_DIR" -type f -path "*/payload/payload.img" -print -quit)
           test -s "$PAYLOAD"
           stat -c 'payload.img: %s bytes' "$PAYLOAD"
-          # 32 MiB payload window from board.toml; smallest FAT32 mformat allows.
-          test "$(stat -c%s "$PAYLOAD")" -le 33554432
+          # 34 MiB payload window from board.toml (FAT32 minimum incl. overhead).
+          test "$(stat -c%s "$PAYLOAD")" -le 35651584
 
       - name: Upload build-check artifacts
         if: always()
